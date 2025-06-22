@@ -15,7 +15,8 @@ user_sessions = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_sessions[user_id] = [
-        {"role": "system", "content": "أنت مساعد ودود وذكي."}
+        {"role": "system", "content": "أنت مساعد ذكي جدًا يشبه ChatGPT. ردودك طبيعية، ودودة، وعميقة، وبتحاول تفهم السؤال كويس قبل ما تجاوب. أكتب بلغة بشرية طبيعية."}
+
     ]
     await update.message.reply_text("البوت شغال ✅")
 
@@ -32,10 +33,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_sessions[user_id].append({"role": "user", "content": user_message})
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=user_sessions[user_id]
-        )
+     response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=user_sessions[user_id],
+        temperature=0.7,
+        max_tokens=300
+     )
         reply = response.choices[0].message.content.strip()
 
         user_sessions[user_id].append({"role": "assistant", "content": reply})
