@@ -9,20 +9,19 @@ from telegram.ext import (
 )
 import openai
 
-# ========== المتغيرات ==========
+# ====== المتغيرات ======
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-APP_URL = os.getenv("APP_URL")  # رابط سيرفرك مع https://
+APP_URL = os.getenv("APP_URL")
 PORT = int(os.getenv("PORT", 10000))
 
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 user_sessions = {}
 
-# ========== دالة بدء البوت ==========
+# ====== أوامر البوت ======
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("البوت شغال ✅")
 
-# ========== دالة استقبال الرسائل ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     text = update.message.text
@@ -44,26 +43,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = response.choices[0].message.content.strip()
         user_sessions[user_id].append({"role": "assistant", "content": reply})
         await update.message.reply_text(reply)
-
     except Exception as e:
         await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
         print(f"OpenAI error: {e}", flush=True)
 
-# ========== تشغيل التطبيق باستخدام Webhook ==========
-async def main():
+# ====== تشغيل البوت ======
+def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("البوت شغال على السيرفر باستخدام Webhook...")
-    await app.run_webhook(
+    app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=f"{APP_URL}/{BOT_TOKEN}"
     )
 
 if __name__ == "__main__":
-    import asyncio
-    # بدل asyncio.run، استخدم run_until_complete عشان ما يصير تعارض event loop
-    asyncio.get_event_loop().run_until_complete(main())
+    main()
