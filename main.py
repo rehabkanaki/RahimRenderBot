@@ -39,11 +39,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         temperature=0.7,
         max_tokens=300
      )
-        reply = response.choices[0].message.content.strip()
-
-        user_sessions[user_id].append({"role": "assistant", "content": reply})
-
-        await update.message.reply_text(reply)
+    reply = response.choices[0].message.content.strip()
+    user_sessions[user_id].append({"role": "assistant", "content": reply})
+    await update.message.reply_text(reply)
     except Exception as e:
         await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
         print(f"OpenAI error: {e}", flush=True)
@@ -53,9 +51,10 @@ async def webhook(request):
         data = await request.json()
         update = Update.de_json(data, application.bot)
         await application.process_update(update)
-    except Exception as e:
+    
+except Exception as e:
         print(f"Webhook error: {e}", flush=True)
-    return web.Response(text="OK")
+        return web.Response(text="OK")
 
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(CommandHandler("start", start))
