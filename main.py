@@ -1,7 +1,7 @@
 import os
 from aiohttp import web
 from telegram import Update
-from telegram.txt import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
