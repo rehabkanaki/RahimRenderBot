@@ -7,27 +7,43 @@ import openai
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-openai.api_key = OPENAI_API_KEY
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+# جلسات المستخدم (لحفظ المحادثة)
+user_sessions = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    user_sessions[user_id] = [
+        {"role": "system", "content": "أنت مساعد ودود وذكي."}
+    ]
     await update.message.reply_text("البوت شغال ✅")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
     user_message = update.message.text
+
+    # تأكد في جلسة
+    if user_id not in user_sessions:
+        user_sessions[user_id] = [
+            {"role": "system", "content": "أنت مساعد ودود وذكي."}
+        ]
+    
+    user_sessions[user_id].append({"role": "user", "content": user_message})
+
     try:
-        response = await call_openai(user_message)
-        await update.message.reply_text(response)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=user_sessions[user_id]
+        )
+        reply = response.choices[0].message.content.strip()
+
+        user_sessions[user_id].append({"role": "assistant", "content": reply})
+
+        await update.message.reply_text(reply)
     except Exception as e:
         await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
         print(f"OpenAI error: {e}", flush=True)
-
-async def call_openai(user_message):
-    resp = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": user_message}],
-        timeout=10  # عشان ما يتأخر
-    )
-    return resp["choices"][0]["message"]["content"].strip()
 
 async def webhook(request):
     try:
@@ -53,7 +69,7 @@ async def run():
     site = web.TCPSite(runner, port=int(os.getenv("PORT")))
     await site.start()
     print("البوت شغال على السيرفر...", flush=True)
-    await asyncio.Event().wait()  # خليك شغال للأبد
+    await asyncio.Event().wait()
 
 import asyncio
 asyncio.run(run())
