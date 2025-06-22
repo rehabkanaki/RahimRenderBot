@@ -12,6 +12,8 @@ import openai
 # ========== المتغيرات ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+APP_URL = os.getenv("APP_URL")  # تأكدي انه متعرف في Render
+PORT = int(os.environ.get("PORT", 10000))
 
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 user_sessions = {}
@@ -25,7 +27,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     text = update.message.text
 
-    # أنشئ جلسة جديدة لو ما موجودة
     if user_id not in user_sessions:
         user_sessions[user_id] = [
             {"role": "system", "content": "أنت مساعد ذكي جدًا يشبه ChatGPT. ردودك طبيعية، ودودة، وعميقة، وبتحاول تفهم السؤال كويس قبل ما تجاوب. أكتب بلغة بشرية طبيعية."}
@@ -55,8 +56,12 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("البوت شغال على السيرفر...")
-    await app.run_polling()
+    print("البوت شغال على السيرفر باستخدام Webhook...")
+    await app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=f"{APP_URL}/{BOT_TOKEN}"
+    )
 
 if __name__ == "__main__":
     import asyncio
