@@ -12,8 +12,8 @@ import openai
 # ========== المتغيرات ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-APP_URL = os.getenv("APP_URL")  # تأكدي انه متعرف في Render
-PORT = int(os.environ.get("PORT", 10000))
+APP_URL = os.getenv("APP_URL")  # رابط سيرفرك مع https://
+PORT = int(os.getenv("PORT", 10000))
 
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 user_sessions = {}
@@ -49,7 +49,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
         print(f"OpenAI error: {e}", flush=True)
 
-# ========== تشغيل التطبيق ==========
+# ========== تشغيل التطبيق باستخدام Webhook ==========
 async def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -65,4 +65,5 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())
+    # بدل asyncio.run، استخدم run_until_complete عشان ما يصير تعارض event loop
+    asyncio.get_event_loop().run_until_complete(main())
