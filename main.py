@@ -29,7 +29,7 @@ async def run_app():
     await application.start()
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, port=int(os.getenv("PORT", 8080)))
+    site = web.TCPSite(runner, port=int(os.getenv("PORT", 10000)))
     await site.start()
     print("البوت شغال على السيرفر...")
     while True:
