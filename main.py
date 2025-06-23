@@ -15,7 +15,7 @@ user_sessions = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_sessions[user_id] = [
-        {"role": "system", "content": "أنت مساعد ودود وذكي."}
+        {"role": "system", "content": "أنت مساعد ذكي تتحدث مع المستخدمين بلغة طبيعية وودية، وتستخدم تعبيرات بشرية بسيطة، وترد كأنك شخص حقيقي متعاطف ومهتم."}
     ]
     await update.message.reply_text("البوت شغال ✅")
 
@@ -26,7 +26,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # تأكد في جلسة
     if user_id not in user_sessions:
         user_sessions[user_id] = [
-            {"role": "system", "content": "أنت مساعد ودود وذكي."}
+            {"role": "system", "content": "أنت مساعد ذكي تتحدث مع المستخدمين بلغة طبيعية وودية، وتستخدم تعبيرات بشرية بسيطة، وترد كأنك شخص حقيقي متعاطف ومهتم."}
         ]
     
     user_sessions[user_id].append({"role": "user", "content": user_message})
