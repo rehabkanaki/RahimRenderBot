@@ -11,29 +11,66 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 user_sessions = {}
+user_dialects = {}  # لتخزين لهجة أو لغة المستخدم
 
-SYSTEM_PROMPT = (
-    "أنت مساعد ذكي وطبيعي، مبني باستخدام تقنيات شركة OpenAI. "
-    "تتحدث مع المستخدمين بلغة ودودة وبسيطة، وترد كأنك شخص حقيقي متعاطف ومهتم. "
-    "لو سأل المستخدم عن شركتك أو من أنت، أخبره بلطف إنك جزء من شركة OpenAI، "
-    "وأنك هنا لمساعدته والإجابة على أسئلته بأفضل طريقة ممكنة."
+async def detect_language_or_dialect(text: str) -> str:
+    """
+    تستخدم OpenAI لتحديد لهجة أو لغة المستخدم من النص.
+    تعيد النص المناسب لاستخدامه في system prompt.
+    """
+    prompt = (
+        "حدد لي لغة أو لهجة النص التالي بدقة عالية، "
+        "إذا كانت العربية حدد لهجتها (سوداني، مصري، خليجي، شامي، مغربي، ...)، "
+        "وإذا كانت لغة أخرى اذكر اسم اللغة بالإنجليزية فقط.\n\n"
+        f"النص: \"{text}\"\n\n"
+        "الرد يجب أن يكون فقط كلمة واحدة أو جملة قصيرة تصف اللهجة أو اللغة."
+    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "أنت مساعد لتحديد لهجة أو لغة النص."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        dialect = response.choices[0].message.content.strip()
+        return dialect
+    except Exception as e:
+        print(f"Error detecting dialect/language: {e}", flush=True)
+        return "العربية الفصحى"  # قيمة افتراضية
+
+SYSTEM_PROMPT_TEMPLATE = (
+    "أنت مساعد ذكي ودود، تتحدث مع المستخدم باللهجة أو اللغة التالية: {dialect}. "
+    "تستخدم لغة بسيطة وطبيعية، وترد كأنك شخص حقيقي متعاطف ومهتم. "
+    "لو المستخدم سأل عن هويتك، عرف نفسك بلطف إنك جزء من شركة OpenAI. "
+    "لو حدث خطأ، اعتذر بطريقة مهذبة وشجع المستخدم على المحاولة مرة أخرى."
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    user_sessions[user_id] = [
-        {"role": "system", "content": SYSTEM_PROMPT}
-    ]
+    user_sessions[user_id] = []
+    user_dialects[user_id] = "العربية الفصحى"  # القيمة الافتراضية
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(dialect=user_dialects[user_id])
+    user_sessions[user_id].append({"role": "system", "content": system_prompt})
     await update.message.reply_text("البوت شغال ✅")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_message = update.message.text
 
+    # إذا ما في جلسة، نبدأ جديدة
     if user_id not in user_sessions:
-        user_sessions[user_id] = [
-            {"role": "system", "content": SYSTEM_PROMPT}
-        ]
+        user_sessions[user_id] = []
+        user_dialects[user_id] = "العربية الفصحى"  # افتراضي
+
+    # لو ما حددنا اللهجة بعد
+    if user_id not in user_dialects or user_dialects[user_id] == "العربية الفصحى":
+        detected = await detect_language_or_dialect(user_message)
+        user_dialects[user_id] = detected
+
+        # نعيد تهيئة النظام مع اللهجة المكتشفة
+        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(dialect=detected)
+        user_sessions[user_id] = [{"role": "system", "content": system_prompt}]
 
     user_sessions[user_id].append({"role": "user", "content": user_message})
 
