@@ -1,21 +1,26 @@
-import os 
+import os
 from aiohttp import web
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-import openai
+from openai import OpenAI
+import asyncio
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-openai.api_key = OPENAI_API_KEY  # التصحيح هنا
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-# جلسات المستخدم (لحفظ المحادثة)
 user_sessions = {}
+
+SYSTEM_PROMPT = (
+    "أنت مساعد ذكي تتحدث مع المستخدمين بلغة طبيعية وودية، "
+    "وتستخدم تعبيرات بشرية بسيطة، وترد كأنك شخص حقيقي متعاطف ومهتم."
+)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_sessions[user_id] = [
-        {"role": "system", "content": "أنت مساعد ذكي تتحدث مع المستخدمين بلغة طبيعية وودية، وتستخدم تعبيرات بشرية بسيطة، وترد كأنك شخص حقيقي متعاطف ومهتم."}
+        {"role": "system", "content": SYSTEM_PROMPT}
     ]
     await update.message.reply_text("البوت شغال ✅")
 
@@ -23,16 +28,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_message = update.message.text
 
-    # تأكد في جلسة
     if user_id not in user_sessions:
         user_sessions[user_id] = [
-            {"role": "system", "content": "أنت مساعد ذكي تتحدث مع المستخدمين بلغة طبيعية وودية، وتستخدم تعبيرات بشرية بسيطة، وترد كأنك شخص حقيقي متعاطف ومهتم."}
+            {"role": "system", "content": SYSTEM_PROMPT}
         ]
-    
+
     user_sessions[user_id].append({"role": "user", "content": user_message})
 
     try:
-        response = openai.ChatCompletion.create(   # تم التعديل هنا
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=user_sessions[user_id]
         )
@@ -71,5 +75,4 @@ async def run():
     print("البوت شغال على السيرفر...", flush=True)
     await asyncio.Event().wait()
 
-import asyncio
 asyncio.run(run())
