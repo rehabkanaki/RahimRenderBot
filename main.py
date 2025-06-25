@@ -11,7 +11,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 user_sessions = {}
-user_dialects = {}  # لتخزين لهجة أو لغة المستخدم
+user_dialects = {}
 
 async def detect_language_or_dialect(text: str) -> str:
     prompt = (
@@ -33,7 +33,7 @@ async def detect_language_or_dialect(text: str) -> str:
         return dialect
     except Exception as e:
         print(f"Error detecting dialect/language: {e}", flush=True)
-        return "العربية الفصحى"  # قيمة افتراضية
+        return "العربية الفصحى"
 
 SYSTEM_PROMPT_TEMPLATE = (
     "أنت مساعد ذكي ودود، تتحدث مع المستخدم باللهجة أو اللغة التالية: {dialect}. "
@@ -45,26 +45,35 @@ SYSTEM_PROMPT_TEMPLATE = (
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_sessions[user_id] = []
-    user_dialects[user_id] = "العربية الفصحى"  # القيمة الافتراضية
+    user_dialects[user_id] = "العربية الفصحى"
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(dialect=user_dialects[user_id])
     user_sessions[user_id].append({"role": "system", "content": system_prompt})
     await update.message.reply_text("البوت شغال ✅")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bot_username = (await context.bot.get_me()).username
+    user_message = update.message.text.lower()  # حولنا الرسالة لحروف صغيرة
+
+    if (
+        f"@{bot_username}".lower() not in user_message
+        and "رحيم" not in user_message
+        and "rahim" not in user_message
+    ):
+        return
+
     user_id = update.message.from_user.id
-    user_message = update.message.text
 
     if user_id not in user_sessions:
         user_sessions[user_id] = []
-        user_dialects[user_id] = "العربية الفصحى"  # افتراضي
+        user_dialects[user_id] = "العربية الفصحى"
 
     if user_id not in user_dialects or user_dialects[user_id] == "العربية الفصحى":
-        detected = await detect_language_or_dialect(user_message)
+        detected = await detect_language_or_dialect(update.message.text)
         user_dialects[user_id] = detected
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(dialect=detected)
         user_sessions[user_id] = [{"role": "system", "content": system_prompt}]
 
-    user_sessions[user_id].append({"role": "user", "content": user_message})
+    user_sessions[user_id].append({"role": "user", "content": update.message.text})
 
     try:
         response = client.chat.completions.create(
