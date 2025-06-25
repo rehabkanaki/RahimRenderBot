@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: RahimRenderBot
+    name: Rahim_AI_Bot
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
