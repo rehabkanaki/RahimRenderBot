@@ -1,1 +1,3 @@
-# RahimRenderBot
+# RahimAIBot
+
+A Telegram AI Bot use ChatGPT ...
