@@ -54,18 +54,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username
     user_message = update.message.text.lower()
 
-    # شرط الرد: لو في تاق، أو اسم، أو رد على رسالة البوت
-    is_reply_to_bot = (
-        update.message.reply_to_message
-        and update.message.reply_to_message.from_user.id == context.bot.id
-    )
+    # الرد فقط لو في تاق أو اسم
     if (
         f"@{bot_username}".lower() not in user_message
         and "رحيم" not in user_message
         and "rahim" not in user_message
-        and not is_reply_to_bot
     ):
         return
+
+    # لو في رسالة معمولة ليها reply، ضيفها مع النص
+    if update.message.reply_to_message and update.message.reply_to_message.text:
+        target_text = update.message.reply_to_message.text
+        combined_input = f"{update.message.text}\n\nالرسالة المردود عليها:\n{target_text}"
+    else:
+        combined_input = update.message.text
 
     user_id = update.message.from_user.id
 
@@ -74,12 +76,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_dialects[user_id] = "العربية الفصحى"
 
     if user_id not in user_dialects or user_dialects[user_id] == "العربية الفصحى":
-        detected = await detect_language_or_dialect(update.message.text)
+        detected = await detect_language_or_dialect(combined_input)
         user_dialects[user_id] = detected
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(dialect=detected)
         user_sessions[user_id] = [{"role": "system", "content": system_prompt}]
 
-    user_sessions[user_id].append({"role": "user", "content": update.message.text})
+    user_sessions[user_id].append({"role": "user", "content": combined_input})
 
     try:
         response = client.chat.completions.create(
