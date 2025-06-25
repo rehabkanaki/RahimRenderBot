@@ -14,10 +14,6 @@ user_sessions = {}
 user_dialects = {}  # لتخزين لهجة أو لغة المستخدم
 
 async def detect_language_or_dialect(text: str) -> str:
-    """
-    تستخدم OpenAI لتحديد لهجة أو لغة المستخدم من النص.
-    تعيد النص المناسب لاستخدامه في system prompt.
-    """
     prompt = (
         "حدد لي لغة أو لهجة النص التالي بدقة عالية، "
         "إذا كانت العربية حدد لهجتها (سوداني، مصري، خليجي، شامي، مغربي، ...)، "
@@ -58,17 +54,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_message = update.message.text
 
-    # إذا ما في جلسة، نبدأ جديدة
     if user_id not in user_sessions:
         user_sessions[user_id] = []
         user_dialects[user_id] = "العربية الفصحى"  # افتراضي
 
-    # لو ما حددنا اللهجة بعد
     if user_id not in user_dialects or user_dialects[user_id] == "العربية الفصحى":
         detected = await detect_language_or_dialect(user_message)
         user_dialects[user_id] = detected
-
-        # نعيد تهيئة النظام مع اللهجة المكتشفة
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(dialect=detected)
         user_sessions[user_id] = [{"role": "system", "content": system_prompt}]
 
@@ -88,6 +80,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
         print(f"OpenAI error: {e}", flush=True)
 
+async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("مرحباً! 👋 البوت دا مخصص للقروبات فقط. أضفني لقروبك عشان أقدر أساعدك 🚀")
+
 async def webhook(request):
     try:
         data = await request.json()
@@ -99,7 +94,8 @@ async def webhook(request):
 
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.COMMAND, handle_message))
+application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, handle_private_message))
 
 app = web.Application()
 app.router.add_post(f'/{BOT_TOKEN}', webhook)
