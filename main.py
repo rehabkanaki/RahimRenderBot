@@ -38,6 +38,8 @@ async def detect_language_or_dialect(text: str) -> str:
 SYSTEM_PROMPT_TEMPLATE = (
     "أنت مساعد ذكي ودود، تتحدث مع المستخدم باللهجة أو اللغة التالية: {dialect}. "
     "تستخدم لغة بسيطة وطبيعية، وترد كأنك شخص حقيقي متعاطف ومهتم. "
+    "لو لاحظت أن الرسالة تحتوي على تاق اسمك (مثل @اسمك) أو ذكرك، اعتبر أن المستخدم يقصدك بالحديث، ولا تقل أنك شخص آخر. "
+    "عند الرد، وضح فكرتك بشكل منظم ومفهوم، وادعم كلامك بأسباب لو أمكن. "
     "لو المستخدم سأل عن هويتك، عرف نفسك بلطف إنك جزء من شركة OpenAI. "
     "لو حدث خطأ، اعتذر بطريقة مهذبة وشجع المستخدم على المحاولة مرة أخرى."
 )
@@ -54,7 +56,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username
     user_message = update.message.text.lower()
 
-    # الرد فقط لو في تاق أو اسم
     if (
         f"@{bot_username}".lower() not in user_message
         and "رحيم" not in user_message
@@ -62,7 +63,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ):
         return
 
-    # لو في رسالة معمولة ليها reply، ضيفها مع النص
     if update.message.reply_to_message and update.message.reply_to_message.text:
         target_text = update.message.reply_to_message.text
         combined_input = f"{update.message.text}\n\nالرسالة المردود عليها:\n{target_text}"
