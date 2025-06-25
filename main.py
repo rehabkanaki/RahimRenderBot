@@ -52,12 +52,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username
-    user_message = update.message.text.lower()  # حولنا الرسالة لحروف صغيرة
+    user_message = update.message.text.lower()
 
+    # شرط الرد: لو في تاق، أو اسم، أو رد على رسالة البوت
+    is_reply_to_bot = (
+        update.message.reply_to_message
+        and update.message.reply_to_message.from_user.id == context.bot.id
+    )
     if (
         f"@{bot_username}".lower() not in user_message
         and "رحيم" not in user_message
         and "rahim" not in user_message
+        and not is_reply_to_bot
     ):
         return
 
