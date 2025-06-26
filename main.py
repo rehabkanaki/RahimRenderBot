@@ -1,4 +1,6 @@
 import os
+import json
+from datetime import datetime
 from aiohttp import web
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -12,6 +14,23 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 user_sessions = {}
 user_dialects = {}
+
+CHAT_HISTORY_FILE = "chat_history.json"
+
+def save_message_to_file(data):
+    try:
+        if os.path.exists(CHAT_HISTORY_FILE):
+            with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        else:
+            history = []
+
+        history.append(data)
+
+        with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving chat history: {e}", flush=True)
 
 async def detect_language_or_dialect(text: str) -> str:
     prompt = (
@@ -72,6 +91,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         combined_input = update.message.text
 
     user_id = update.message.from_user.id
+    group_id = update.message.chat.id
+    user_name = update.message.from_user.full_name
 
     if user_id not in user_sessions:
         user_sessions[user_id] = []
@@ -82,8 +103,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_dialects[user_id] = detected
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(dialect=detected)
         user_sessions[user_id] = [{"role": "system", "content": system_prompt}]
+    else:
+        detected = user_dialects[user_id]
 
     user_sessions[user_id].append({"role": "user", "content": combined_input})
+
+    # حفظ الرسالة
+    save_message_to_file({
+        "user_id": user_id,
+        "user_name": user_name,
+        "group_id": group_id,
+        "text": combined_input,
+        "dialect": detected,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
 
     try:
         response = client.chat.completions.create(
@@ -91,9 +124,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             messages=user_sessions[user_id]
         )
         reply = response.choices[0].message.content.strip()
-
         user_sessions[user_id].append({"role": "assistant", "content": reply})
-
         await update.message.reply_text(reply)
     except Exception as e:
         await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
