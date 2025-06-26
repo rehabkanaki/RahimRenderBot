@@ -18,6 +18,7 @@ user_dialects = {}
 CHAT_HISTORY_FILE = "chat_history.json"
 
 def save_message_to_file(data):
+    print("🔹 save_message_to_file called", flush=True)
     try:
         if os.path.exists(CHAT_HISTORY_FILE):
             with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
@@ -29,6 +30,9 @@ def save_message_to_file(data):
 
         with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
+            
+        print("✅ Message saved to file", flush=True)
+
     except Exception as e:
         print(f"Error saving chat history: {e}", flush=True)
 
