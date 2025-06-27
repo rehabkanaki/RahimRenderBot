@@ -6,36 +6,51 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
 import asyncio
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
+# ========== إعداد المتغيرات ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
-
 user_sessions = {}
 user_dialects = {}
 
-CHAT_HISTORY_FILE = "chat_history.json"
+# ========== إعداد Google Sheets ==========
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+gc = gspread.authorize(creds)
+sheet = gc.open("RahimBot_History").sheet1
 
-def save_message_to_file(data):
-    print("🔹 save_message_to_file called", flush=True)
+# ========== دالة الحفظ في Google Sheets ==========
+def save_message_to_sheet(data):
     try:
-        if os.path.exists(CHAT_HISTORY_FILE):
-            with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
-                history = json.load(f)
-        else:
-            history = []
-
-        history.append(data)
-
-        with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-            
-        print("✅ Message saved to file", flush=True)
-
+        sheet.append_row([
+            data["timestamp"],
+            str(data["user_id"]),
+            data["user_name"],
+            str(data["group_id"]),
+            data["dialect"],
+            data["text"]
+        ])
+        print("✅ Saved to Google Sheet", flush=True)
     except Exception as e:
-        print(f"Error saving chat history: {e}", flush=True)
+        print(f"❌ Error saving to Google Sheet: {e}", flush=True)
 
+# ========== البرومبت الأساسي ==========
+SYSTEM_PROMPT_TEMPLATE = (
+    "أنت مساعد ذكي ودود موجود داخل قروب دردشة. "
+    "تتحدث مع المستخدم باللهجة أو اللغة التالية: {dialect}. "
+    "تتصرف كأنك عضو متعاون وودود في المجموعة، وتتعامل مع الرسائل وكأنك وسط الناس، مش مجرد دردشة فردية. "
+    "لو لاحظت أن الرسالة تحتوي على تاق اسمك (مثل @اسمك) أو ذكرك، اعتبر أن المستخدم يقصدك بالحديث. "
+    "لو طلب منك المستخدم تنفيذ أمر يخص عضو آخر في القروب (مثل توصيل رسالة أو نداء عضو)، وضح أنك مجرد بوت لا تملك القدرة الفعلية على التواصل المباشر، لكن ساعد المستخدم بصياغة رسالة مناسبة أو قدم له اقتراح لطيف. "
+    "استخدم لغة بسيطة وطبيعية، ووضح فكرتك بشكل منظم ومفهوم، وادعم كلامك بأسباب لو أمكن. "
+    "لو المستخدم سأل عن هويتك، عرف نفسك بلطف إنك جزء من شركة OpenAI. "
+    "لو حدث خطأ، اعتذر بطريقة مهذبة وشجع المستخدم على المحاولة مرة أخرى."
+)
+
+# ========== تحديد اللهجة ==========
 async def detect_language_or_dialect(text: str) -> str:
     prompt = (
         "حدد لي لغة أو لهجة النص التالي بدقة عالية، "
@@ -52,23 +67,12 @@ async def detect_language_or_dialect(text: str) -> str:
                 {"role": "user", "content": prompt}
             ]
         )
-        dialect = response.choices[0].message.content.strip()
-        return dialect
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"Error detecting dialect/language: {e}", flush=True)
         return "العربية الفصحى"
 
-SYSTEM_PROMPT_TEMPLATE = (
-    "أنت مساعد ذكي ودود موجود داخل قروب دردشة. "
-    "تتحدث مع المستخدم باللهجة أو اللغة التالية: {dialect}. "
-    "تتصرف كأنك عضو متعاون وودود في المجموعة، وتتعامل مع الرسائل وكأنك وسط الناس، مش مجرد دردشة فردية. "
-    "لو لاحظت أن الرسالة تحتوي على تاق اسمك (مثل @اسمك) أو ذكرك، اعتبر أن المستخدم يقصدك بالحديث. "
-    "لو طلب منك المستخدم تنفيذ أمر يخص عضو آخر في القروب (مثل توصيل رسالة أو نداء عضو)، وضح أنك مجرد بوت لا تملك القدرة الفعلية على التواصل المباشر، لكن ساعد المستخدم بصياغة رسالة مناسبة أو قدم له اقتراح لطيف. "
-    "استخدم لغة بسيطة وطبيعية، ووضح فكرتك بشكل منظم ومفهوم، وادعم كلامك بأسباب لو أمكن. "
-    "لو المستخدم سأل عن هويتك، عرف نفسك بلطف إنك جزء من شركة OpenAI. "
-    "لو حدث خطأ، اعتذر بطريقة مهذبة وشجع المستخدم على المحاولة مرة أخرى."
-)
-
+# ========== أوامر البداية ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_sessions[user_id] = []
@@ -77,6 +81,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_sessions[user_id].append({"role": "system", "content": system_prompt})
     await update.message.reply_text("البوت شغال ✅")
 
+# ========== التعامل مع رسائل القروبات ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username
     user_message = update.message.text.lower()
@@ -112,8 +117,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_sessions[user_id].append({"role": "user", "content": combined_input})
 
-    # حفظ الرسالة
-    save_message_to_file({
+    save_message_to_sheet({
         "user_id": user_id,
         "user_name": user_name,
         "group_id": group_id,
@@ -134,9 +138,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
         print(f"OpenAI error: {e}", flush=True)
 
+# ========== رسائل الخاص ==========
 async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("مرحباً! 👋 البوت دا مخصص للقروبات فقط. أضفني لقروبك عشان أقدر أساعدك 🚀")
 
+# ========== Webhook ==========
 async def webhook(request):
     try:
         data = await request.json()
@@ -146,6 +152,7 @@ async def webhook(request):
         print(f"Webhook error: {e}", flush=True)
     return web.Response(text="OK")
 
+# ========== إعداد التطبيق ==========
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.COMMAND, handle_message))
