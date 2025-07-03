@@ -142,7 +142,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ========== الخاص ==========
 async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("مرحباً! 👋 البوت دا مخصص للقروبات فقط. أضفني لقروبك عشان أقدر أساعدك 🚀")
+    await update.message.reply_text(
+    "مرحباً! 👋 البوت دا مخصص للقروبات فقط.\n"
+    "Please note: This bot is designed for group chats only.\n"
+    "أضفني لقروبك عشان أقدر أساعدك 🚀"
+    )
 
 # ========== Webhook ==========
 async def webhook(request):
