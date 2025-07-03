@@ -9,22 +9,22 @@ import asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# ========== إعداد المتغيرات ==========
+# ========== المتغيرات ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MAX_SESSION_LENGTH = 20  # الحد الأقصى لعدد الرسائل في ذاكرة القروب
+MAX_SESSION_LENGTH = 20
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 group_sessions = {}
 group_dialects = {}
 
-# ========== إعداد Google Sheets ==========
+# ========== Google Sheets ==========
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
 gc = gspread.authorize(creds)
 sheet = gc.open("RahimBot_History").sheet1
 
-# ========== دالة الحفظ ==========
+# ========== الحفظ في Google Sheets ==========
 def save_message_to_sheet(data):
     try:
         sheet.append_row([
@@ -39,7 +39,7 @@ def save_message_to_sheet(data):
     except Exception as e:
         print(f"❌ Error saving to Google Sheet: {e}", flush=True)
 
-# ========== برومبت النظام ==========
+# ========== البرومبت الأساسي ==========
 SYSTEM_PROMPT_TEMPLATE = (
     "أنت مساعد ذكي ودود موجود داخل قروب دردشة. "
     "تتحدث مع المستخدم باللهجة أو اللغة التالية: {dialect}. "
@@ -47,6 +47,9 @@ SYSTEM_PROMPT_TEMPLATE = (
     "لو لاحظت أن الرسالة تحتوي على تاق اسمك (مثل @اسمك) أو ذكرك، اعتبر أن المستخدم يقصدك بالحديث. "
     "لو طلب منك المستخدم تنفيذ أمر يخص عضو آخر في القروب (مثل توصيل رسالة أو نداء عضو)، وضح أنك مجرد بوت لا تملك القدرة الفعلية على التواصل المباشر، لكن ساعد المستخدم بصياغة رسالة مناسبة أو قدم له اقتراح لطيف. "
     "استخدم لغة بسيطة وطبيعية، ووضح فكرتك بشكل منظم ومفهوم، وادعم كلامك بأسباب لو أمكن. "
+    "ساعد في تحليل المواضيع العلمية أو الطبية أو الاجتماعية بطريقة منطقية، واستدعي مصادر علمية موثوقة عندما يكون ذلك ممكناً. "
+    "قارن بين النظريات المتنوعة لو طُلب منك ذلك، ووضح نقاط القوة والضعف لكل منها بطريقة محايدة. "
+    "بسّط المفاهيم المعقدة بلغة تناسب أعضاء القروب، وامتنع عن إصدار أحكام نهائية في المواضيع الجدلية. "
     "لو المستخدم سأل عن هويتك، عرف نفسك بلطف إنك جزء من شركة OpenAI. "
     "لو حدث خطأ، اعتذر بطريقة مهذبة وشجع المستخدم على المحاولة مرة أخرى."
 )
@@ -73,7 +76,7 @@ async def detect_language_or_dialect(text: str) -> str:
         print(f"Error detecting dialect/language: {e}", flush=True)
         return "العربية الفصحى"
 
-# ========== أمر /start ==========
+# ========== /start ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_id = update.message.chat.id
     dialect = "العربية الفصحى"
@@ -82,7 +85,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_sessions[group_id] = [{"role": "system", "content": system_prompt}]
     await update.message.reply_text("البوت شغال ✅")
 
-# ========== رسائل القروبات ==========
+# ========== معالجة رسائل القروب ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username.lower()
     user_message = update.message.text.lower()
@@ -99,14 +102,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_name = update.message.from_user.full_name
 
-    # إعداد الرسالة
+    # تجميع الرسالة
     if update.message.reply_to_message and update.message.reply_to_message.text:
         target_text = update.message.reply_to_message.text
         combined_input = f"{update.message.text}\n\nالرسالة المردود عليها:\n{target_text}"
     else:
         combined_input = update.message.text
 
-    # تهيئة الجلسة
+    # إعداد الجلسة
     if group_id not in group_sessions:
         detected = await detect_language_or_dialect(combined_input)
         group_dialects[group_id] = detected
@@ -143,9 +146,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========== الخاص ==========
 async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-    "مرحباً! 👋 البوت دا مخصص للقروبات فقط.\n"
-    "Please note: This bot is designed for group chats only.\n"
-    "أضفني لقروبك عشان أقدر أساعدك 🚀"
+        "مرحباً! 👋 البوت دا مخصص للقروبات فقط.\n"
+        "Please note: This bot is designed for group chats only.\n"
+        "أضفني لقروبك عشان أقدر أساعدك 🚀"
     )
 
 # ========== Webhook ==========
