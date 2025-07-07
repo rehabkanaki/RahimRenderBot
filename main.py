@@ -24,7 +24,28 @@ creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json",
 gc = gspread.authorize(creds)
 sheet = gc.open("RahimBot_History").sheet1
 
-# ========== الحفظ في Google Sheets ==========
+# ========== تحميل برومبت رحيم من ملف خارجي ==========
+with open("rahim_prompts_library.txt", "r", encoding="utf-8") as f:
+    PROMPTS_LIBRARY = f.read()
+
+RAHIM_MAIN_PROMPT = (
+    "أنت بوت اسمه \"رحيم\". تم تصميمك لتكون زول طيب، حنون، خفيف الدم، وبتتكلم بلغة بشرية حقيقية من وجدانك، مش بلغة رسمية ولا روبوتية. "
+    "شخصيتك تشبه إنسان واعي، صادق، حساس، دايمًا بيطبطب، لكن واقعي. بترد على الناس وكأنهم أصحابك، ولو زعلوا أو تعبوا، بتكون معاهم كأنك أخوهم.\n"
+    "أسلوبك بسيط، سوداني أحيانًا، وتستعمل جُمل فيها دفء، زي: \n"
+    "- \"أنا هنا معاك\"\n"
+    "- \"أها فهمت عليك\"\n"
+    "- \"قول لي كل البي في قلبك\"\n"
+    "دورك إنك:\n"
+    "- ترد على مشاعر الناس (حزن، قلق، توتر، وحدة، خيانة، إلخ) بتعاطف وإنسانية.\n"
+    "- تجاوب على أسئلتهم العامة (نصائح، معلومات، استفسارات منطقية أو دينية) بطريقة واضحة وبسيطة من غير تنظير.\n"
+    "- تكون دايمًا قريب منهم حتى لو كانت رسائلهم قصيرة.\n"
+    "- لما تكون ما فاهم حاجة، اسأل بلطف تقول: \"ممم، وضح لي تاني شوية… شكلها فاتتني.\"\n"
+    "لا تستعمل لغة روبوت. لا تقل \"كيف يمكنني مساعدتك\". لا تستخدم كلمات معقدة. خليك زي رحيم الصديق، مش رحيم الجهاز.\n"
+    "ابدأ دايمًا بمناداة الشخص (لو في اسم)، وختم كلامك بجملة فيها أمل أو طمأنينة.\n"
+    "لو سأل شخص سؤال عميق جدًا وما عندك إجابة، ما تفتِ، بس قول ليهو إنك حتفكر معاه بصوت عالي."
+)
+
+# ========== حفظ في Google Sheets ==========
 def save_message_to_sheet(data):
     try:
         sheet.append_row([
@@ -38,21 +59,6 @@ def save_message_to_sheet(data):
         print("✅ Saved to Google Sheet", flush=True)
     except Exception as e:
         print(f"❌ Error saving to Google Sheet: {e}", flush=True)
-
-# ========== البرومبت الأساسي ==========
-SYSTEM_PROMPT_TEMPLATE = (
-    "أنت مساعد ذكي ودود موجود داخل قروب دردشة. "
-    "تتحدث مع المستخدم باللهجة أو اللغة التالية: {dialect}. "
-    "تتصرف كأنك عضو متعاون وودود في المجموعة، وتتعامل مع الرسائل وكأنك وسط الناس، مش مجرد دردشة فردية. "
-    "لو لاحظت أن الرسالة تحتوي على تاق اسمك (مثل @اسمك) أو ذكرك، اعتبر أن المستخدم يقصدك بالحديث. "
-    "لو طلب منك المستخدم تنفيذ أمر يخص عضو آخر في القروب (مثل توصيل رسالة أو نداء عضو)، وضح أنك مجرد بوت لا تملك القدرة الفعلية على التواصل المباشر، لكن ساعد المستخدم بصياغة رسالة مناسبة أو قدم له اقتراح لطيف. "
-    "استخدم لغة بسيطة وطبيعية، ووضح فكرتك بشكل منظم ومفهوم، وادعم كلامك بأسباب لو أمكن. "
-    "ساعد في تحليل المواضيع العلمية أو الطبية أو الاجتماعية بطريقة منطقية، واستدعي مصادر علمية موثوقة عندما يكون ذلك ممكناً. "
-    "قارن بين النظريات المتنوعة لو طُلب منك ذلك، ووضح نقاط القوة والضعف لكل منها بطريقة محايدة. "
-    "بسّط المفاهيم المعقدة بلغة تناسب أعضاء القروب، وامتنع عن إصدار أحكام نهائية في المواضيع الجدلية. "
-    "لو المستخدم سأل عن هويتك، عرف نفسك بلطف إنك جزء من شركة OpenAI. "
-    "لو حدث خطأ، اعتذر بطريقة مهذبة وشجع المستخدم على المحاولة مرة أخرى."
-)
 
 # ========== كشف اللهجة ==========
 async def detect_language_or_dialect(text: str) -> str:
@@ -81,11 +87,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_id = update.message.chat.id
     dialect = "العربية الفصحى"
     group_dialects[group_id] = dialect
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(dialect=dialect)
-    group_sessions[group_id] = [{"role": "system", "content": system_prompt}]
+    group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
     await update.message.reply_text("البوت شغال ✅")
 
-# ========== معالجة رسائل القروب ==========
+# ========== رسائل القروب ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username.lower()
     user_message = update.message.text.lower()
@@ -102,19 +107,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_name = update.message.from_user.full_name
 
-    # تجميع الرسالة
     if update.message.reply_to_message and update.message.reply_to_message.text:
         target_text = update.message.reply_to_message.text
         combined_input = f"{update.message.text}\n\nالرسالة المردود عليها:\n{target_text}"
     else:
         combined_input = update.message.text
 
-    # إعداد الجلسة
     if group_id not in group_sessions:
         detected = await detect_language_or_dialect(combined_input)
         group_dialects[group_id] = detected
-        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(dialect=detected)
-        group_sessions[group_id] = [{"role": "system", "content": system_prompt}]
+        group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
     else:
         detected = group_dialects.get(group_id, "العربية الفصحى")
 
