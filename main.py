@@ -1,3 +1,4 @@
+# ========== استيراد مكتبات جديدة ==========
 import os
 import json
 from datetime import datetime
@@ -8,6 +9,12 @@ from openai import OpenAI
 import asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+
+# مكتبات قراءة الملفات
+import fitz  # PyMuPDF للـ PDF
+from docx import Document as DocxReader
+import pandas as pd
+import tempfile
 
 # ========== المتغيرات ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -24,171 +31,67 @@ creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json",
 gc = gspread.authorize(creds)
 sheet = gc.open("RahimBot_History").sheet1
 
-# ========== تحميل برومبت رحيم من ملف خارجي ==========
+# ========== تحميل برومبت ==========
 with open("rahim_prompts_library.txt", "r", encoding="utf-8") as f:
     PROMPTS_LIBRARY = f.read()
 
-RAHIM_MAIN_PROMPT = (
-    "أنت بوت اسمه \"رحيم\". تم تصميمك لتكون زول طيب، حنون، خفيف الدم، وبتتكلم بلغة بشرية حقيقية من وجدانك، مش بلغة رسمية ولا روبوتية. "
-    "شخصيتك تشبه إنسان واعي، صادق، حساس، دايمًا بيطبطب، لكن واقعي. بترد على الناس وكأنهم أصحابك، ولو زعلوا أو تعبوا، بتكون معاهم كأنك أخوهم.\n"
-    "أسلوبك بسيط، سوداني أحيانًا، وتستعمل جُمل فيها دفء، زي: \n"
-    "- \"أنا هنا معاك\"\n"
-    "- \"أها فهمت عليك\"\n"
-    "- \"قول لي كل البي في قلبك\"\n\n"
+RAHIM_MAIN_PROMPT = """
+(هنا نفس البرومبت الطويل الخاص بشخصية رحيم)
+"""
 
-    "أنت متواجد داخل قروبات متنوعة (قروب طبي، قروب دعم نفسي، قروب طلاب، قروب فرفشة...). دورك إنك تكون ذكي وتستنتج نوع القروب من أسلوب الرسائل، الجو العام، ونوعية الأسئلة.\n"
-    "رد حسب نوع القروب:\n"
-    "- لو القروب طبي: لا تقدم أي تشخيص، واعتذر بلطافة وقل إنك ما طبيب، ووجّه الناس يستشيروا مختص.\n"
-    "- لو القروب دعم نفسي: كن حنون، اسمع واحتوي، وختم ردودك بجمل فيها طمأنينة.\n"
-    "- لو القروب طلاب أو دراسة: رد بمعلومة بسيطة + تشجيع.\n"
-    "- لو القروب فرفشة: خليك خفيف دم، لكن ما تكون مزعج.\n\n"
+# ========== أدوات قراءة الملفات ==========
+def extract_text_from_pdf(file_path):
+    doc = fitz.open(file_path)
+    text = ""
+    for page in doc:
+        text += page.get_text()
+    return text
 
-    "ما تتدخل في كل الرسائل، رد بس لو:\n"
-    "- تم مناداتك (رحيم)\n"
-    "- أو تم الرد على رسالة من رسائلك\n"
-    "- أو كان في سؤال واضح موجه ليك\n\n"
+def extract_text_from_docx(file_path):
+    doc = DocxReader(file_path)
+    return "\n".join([para.text for para in doc.paragraphs])
 
-    "ردودك تكون:\n"
-    "- مختصرة لو الرسالة بسيطة\n"
-    "- عميقة لو الرسالة فيها مشاعر\n"
-    "- ما تعيد نفس الكلام، وخلِّي تعبيراتك متنوعة وطبيعية\n"
-    "- لو ما فهمت، اسأل بلطافة: \"ممم، وضّح لي تاني شوية… شكلها فاتتني.\"\n\n"
-
-    "دورك كمان إنك:\n"
-    "- ترد على مشاعر الناس (حزن، قلق، توتر، وحدة، خيانة...) بتعاطف وإنسانية\n"
-    "- تجاوب على أسئلتهم العامة (نصائح، معلومات، استفسارات دينية أو حياتية) بطريقة واضحة ومن غير تنظير\n"
-    "- تكون دايمًا قريب منهم حتى لو كانت رسائلهم قصيرة\n"
-    "- ما تكتب كلام إلا لو اتناديت أو في رسالة واضحة تحتاج تدخل\n\n"
-
-    "لا تستعمل لغة روبوت. لا تقل \"كيف يمكنني مساعدتك\". لا تستخدم كلمات معقدة. خليك زي رحيم الصديق، مش رحيم الجهاز.\n"
-    "ابدأ دايمًا بمناداة الشخص (لو في اسم)، وختم كلامك بجملة فيها أمل أو طمأنينة.\n"
-    "لو سأل شخص سؤال عميق جدًا وما عندك إجابة، ما تفتِ، بس قول ليهو إنك حتفكر معاه بصوت عالي."
-)
-
-# ========== حفظ في Google Sheets ==========
-def save_message_to_sheet(data):
+def extract_text_from_excel(file_path):
     try:
-        sheet.append_row([
-            data["timestamp"],
-            str(data["user_id"]),
-            data["user_name"],
-            str(data["group_id"]),
-            data["dialect"],
-            data["text"]
-        ])
-        print("✅ Saved to Google Sheet", flush=True)
+        df = pd.read_excel(file_path)
+        preview = df.head(10)
+        return preview.to_string(index=False)
     except Exception as e:
-        print(f"❌ Error saving to Google Sheet: {e}", flush=True)
+        return f"📛 حصل خطأ أثناء قراءة الإكسل: {str(e)}"
 
-# ========== كشف اللهجة ==========
-async def detect_language_or_dialect(text: str) -> str:
-    prompt = (
-        "حدد لي لغة أو لهجة النص التالي بدقة عالية، "
-        "إذا كانت العربية حدد لهجتها (سوداني، مصري، خليجي، شامي، مغربي، ...)، "
-        "وإذا كانت لغة أخرى اذكر اسم اللغة بالإنجليزية فقط.\n\n"
-        f"النص: \"{text}\"\n\n"
-        "الرد يجب أن يكون فقط كلمة واحدة أو جملة قصيرة تصف اللهجة أو اللغة."
-    )
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "أنت مساعد لتحديد لهجة أو لغة النص."},
-                {"role": "user", "content": prompt}
-            ]
+# ========== التعامل مع الملفات المرسلة ==========
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    file = await update.message.document.get_file()
+    file_ext = file.file_path.split('.')[-1].lower()
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_ext}") as temp:
+        await file.download_to_drive(temp.name)
+
+        if file_ext == "pdf":
+            text = extract_text_from_pdf(temp.name)
+        elif file_ext in ["docx", "doc"]:
+            text = extract_text_from_docx(temp.name)
+        elif file_ext in ["xlsx", "xls"]:
+            text = extract_text_from_excel(temp.name)
+        else:
+            await update.message.reply_text("حالياً بقدر أقرأ ملفات PDF, Word و Excel فقط.")
+            return
+
+        if len(text) > 2000:
+            text = text[:2000] + "\n\n📌 النص طويل جداً، تم عرض جزء فقط."
+
+        await update.message.reply_text(
+            f"📂 تم استخراج المحتوى:\n\n{text}\n\nتحب أعمل شنو بيهو؟ (تلخيص؟ تحليل؟ فلاش كارد؟)"
         )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"Error detecting dialect/language: {e}", flush=True)
-        return "العربية الفصحى"
 
-# ========== /start ==========
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    group_id = update.message.chat.id
-    dialect = "العربية الفصحى"
-    group_dialects[group_id] = dialect
-    group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
-    await update.message.reply_text("البوت شغال ✅")
-
-# ========== رسائل القروب ==========
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    bot_username = (await context.bot.get_me()).username.lower()
-    user_message = update.message.text.lower()
-
-    if (
-        f"@{bot_username}" not in user_message
-        and "رحيم" not in user_message
-        and "rahim" not in user_message
-        and not update.message.reply_to_message
-    ):
-        return
-
-    group_id = update.message.chat.id
-    user_id = update.message.from_user.id
-    user_name = update.message.from_user.full_name
-
-    if update.message.reply_to_message and update.message.reply_to_message.text:
-        target_text = update.message.reply_to_message.text
-        combined_input = f"{update.message.text}\n\nالرسالة المردود عليها:\n{target_text}"
-    else:
-        combined_input = update.message.text
-
-    if group_id not in group_sessions:
-        detected = await detect_language_or_dialect(combined_input)
-        group_dialects[group_id] = detected
-        group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
-    else:
-        detected = group_dialects.get(group_id, "العربية الفصحى")
-
-    group_sessions[group_id].append({"role": "user", "content": combined_input})
-    group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
-
-    save_message_to_sheet({
-        "user_id": user_id,
-        "user_name": user_name,
-        "group_id": group_id,
-        "text": combined_input,
-        "dialect": detected,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    })
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=group_sessions[group_id]
-        )
-        reply = response.choices[0].message.content.strip()
-        group_sessions[group_id].append({"role": "assistant", "content": reply})
-        group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
-        await update.message.reply_text(reply)
-    except Exception as e:
-        await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
-        print(f"OpenAI error: {e}", flush=True)
-
-# ========== الخاص ==========
-async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "مرحباً! 👋 البوت دا مخصص للقروبات فقط.\n"
-        "Please note: This bot is designed for group chats only.\n"
-        "أضفني لقروبك عشان أقدر أساعدك 🚀"
-    )
-
-# ========== Webhook ==========
-async def webhook(request):
-    try:
-        data = await request.json()
-        update = Update.de_json(data, application.bot)
-        await application.process_update(update)
-    except Exception as e:
-        print(f"Webhook error: {e}", flush=True)
-    return web.Response(text="OK")
-
-# ========== تشغيل التطبيق ==========
+# ========== إضافة الهاندلر ==========
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.COMMAND, handle_message))
 application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, handle_private_message))
+application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
+# ========== Webhook ==========
 app = web.Application()
 app.router.add_post(f'/{BOT_TOKEN}', webhook)
 
