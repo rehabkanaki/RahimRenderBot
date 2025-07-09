@@ -3,3 +3,7 @@ aiohttp
 openai>=1.0.0
 gspread
 oauth2client
+python-docx
+PyMuPDF
+pandas
+openpyxl
