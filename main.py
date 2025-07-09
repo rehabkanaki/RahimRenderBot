@@ -84,6 +84,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📂 تم استخراج المحتوى:\n\n{text}\n\nتحب أعمل شنو بيهو؟ (تلخيص؟ تحليل؟ فلاش كارد؟)"
         )
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("أهلاً بيك! 👋 أنا رحيم، مساعدك الذكي. أرسل لي أي سؤال أو ملف وحنبدأ 😄")
+
 # ========== إضافة الهاندلر ==========
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(CommandHandler("start", start))
