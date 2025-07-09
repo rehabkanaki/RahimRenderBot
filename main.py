@@ -1,4 +1,3 @@
-# ========== استيراد مكتبات جديدة ==========
 import os
 import json
 from datetime import datetime
@@ -11,7 +10,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 # مكتبات قراءة الملفات
-import fitz  # PyMuPDF للـ PDF
+import fitz  # PyMuPDF
 from docx import Document as DocxReader
 import pandas as pd
 import tempfile
@@ -35,17 +34,15 @@ sheet = gc.open("RahimBot_History").sheet1
 with open("rahim_prompts_library.txt", "r", encoding="utf-8") as f:
     PROMPTS_LIBRARY = f.read()
 
-RAHIM_MAIN_PROMPT = """
-(هنا نفس البرومبت الطويل الخاص بشخصية رحيم)
-"""
+RAHIM_MAIN_PROMPT = (
+    "أنت بوت اسمه \"رحيم\". تم تصميمك لتكون زول طيب، حنون، خفيف الدم، وبتتكلم بلغة بشرية حقيقية..."
+    # كملي البرومبت بنفس الشكل اللي عندك
+)
 
 # ========== أدوات قراءة الملفات ==========
 def extract_text_from_pdf(file_path):
     doc = fitz.open(file_path)
-    text = ""
-    for page in doc:
-        text += page.get_text()
-    return text
+    return "\n".join(page.get_text() for page in doc)
 
 def extract_text_from_docx(file_path):
     doc = DocxReader(file_path)
@@ -59,7 +56,112 @@ def extract_text_from_excel(file_path):
     except Exception as e:
         return f"📛 حصل خطأ أثناء قراءة الإكسل: {str(e)}"
 
-# ========== التعامل مع الملفات المرسلة ==========
+# ========== حفظ في Google Sheets ==========
+def save_message_to_sheet(data):
+    try:
+        sheet.append_row([
+            data["timestamp"],
+            str(data["user_id"]),
+            data["user_name"],
+            str(data["group_id"]),
+            data["dialect"],
+            data["text"]
+        ])
+        print("✅ Saved to Google Sheet", flush=True)
+    except Exception as e:
+        print(f"❌ Error saving to Google Sheet: {e}", flush=True)
+
+# ========== كشف اللهجة ==========
+async def detect_language_or_dialect(text: str) -> str:
+    prompt = (
+        "حدد لي لغة أو لهجة النص التالي بدقة عالية..."
+        f"النص: \"{text}\""
+    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "أنت مساعد لتحديد لهجة أو لغة النص."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error detecting dialect/language: {e}", flush=True)
+        return "العربية الفصحى"
+
+# ========== /start ==========
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    group_id = update.message.chat.id
+    dialect = "العربية الفصحى"
+    group_dialects[group_id] = dialect
+    group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
+    await update.message.reply_text("البوت شغال ✅")
+
+# ========== رسائل القروب ==========
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bot_username = (await context.bot.get_me()).username.lower()
+    user_message = update.message.text.lower()
+
+    if (
+        f"@{bot_username}" not in user_message
+        and "رحيم" not in user_message
+        and "rahim" not in user_message
+        and not update.message.reply_to_message
+    ):
+        return
+
+    group_id = update.message.chat.id
+    user_id = update.message.from_user.id
+    user_name = update.message.from_user.full_name
+
+    if update.message.reply_to_message and update.message.reply_to_message.text:
+        target_text = update.message.reply_to_message.text
+        combined_input = f"{update.message.text}\n\nالرسالة المردود عليها:\n{target_text}"
+    else:
+        combined_input = update.message.text
+
+    if group_id not in group_sessions:
+        detected = await detect_language_or_dialect(combined_input)
+        group_dialects[group_id] = detected
+        group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
+    else:
+        detected = group_dialects.get(group_id, "العربية الفصحى")
+
+    group_sessions[group_id].append({"role": "user", "content": combined_input})
+    group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
+
+    save_message_to_sheet({
+        "user_id": user_id,
+        "user_name": user_name,
+        "group_id": group_id,
+        "text": combined_input,
+        "dialect": detected,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=group_sessions[group_id]
+        )
+        reply = response.choices[0].message.content.strip()
+        group_sessions[group_id].append({"role": "assistant", "content": reply})
+        group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
+        await update.message.reply_text(reply)
+    except Exception as e:
+        await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
+        print(f"OpenAI error: {e}", flush=True)
+
+# ========== الخاص ==========
+async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "مرحباً! 👋 البوت دا مخصص للقروبات فقط.\n"
+        "Please note: This bot is designed for group chats only.\n"
+        "أضفني لقروبك عشان أقدر أساعدك 🚀"
+    )
+
+# ========== التعامل مع الملفات ==========
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file = await update.message.document.get_file()
     file_ext = file.file_path.split('.')[-1].lower()
@@ -84,17 +186,23 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📂 تم استخراج المحتوى:\n\n{text}\n\nتحب أعمل شنو بيهو؟ (تلخيص؟ تحليل؟ فلاش كارد؟)"
         )
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("أهلاً بيك! 👋 أنا رحيم، مساعدك الذكي. أرسل لي أي سؤال أو ملف وحنبدأ 😄")
+# ========== Webhook ==========
+async def webhook(request):
+    try:
+        data = await request.json()
+        update = Update.de_json(data, application.bot)
+        await application.process_update(update)
+    except Exception as e:
+        print(f"Webhook error: {e}", flush=True)
+    return web.Response(text="OK")
 
-# ========== إضافة الهاندلر ==========
+# ========== تشغيل التطبيق ==========
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.COMMAND, handle_message))
 application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, handle_private_message))
 application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
-# ========== Webhook ==========
 app = web.Application()
 app.router.add_post(f'/{BOT_TOKEN}', webhook)
 
