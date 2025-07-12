@@ -162,9 +162,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     })
 
     if any(x in combined_input for x in ["علاج", "تشخيص", "أعراض", "مرض", "دواء"]):
-        web_result = await perform_web_search(combined_input)
+    web_result = await perform_web_search(combined_input)
+    
+    if "ما لقيت نتيجة واضحة" in web_result or "📛 حصل خطأ" in web_result:
+        await update.message.reply_text("ما لقيت مصدر خارجي، لكن خليني أشرح ليك من معرفتي العامة...")
+    else:
         await update.message.reply_text(web_result)
-        return
+        return  # لو نجح في البحث، ما في داعي يرجع لـ GPT
+
 
     try:
         response = client.chat.completions.create(
