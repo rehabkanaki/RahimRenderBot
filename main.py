@@ -8,6 +8,7 @@ from openai import OpenAI
 import asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import aiohttp
 
 # مكتبات قراءة الملفات
 import fitz  # PyMuPDF
@@ -18,6 +19,8 @@ import tempfile
 # ========== المتغيرات ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_CX = os.getenv("GOOGLE_CX")
 MAX_SESSION_LENGTH = 20
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -35,8 +38,8 @@ with open("rahim_prompts_library.txt", "r", encoding="utf-8") as f:
     PROMPTS_LIBRARY = f.read()
 
 RAHIM_MAIN_PROMPT = (
-    "أنت بوت اسمه \"رحيم\". تم تصميمك لتكون زول طيب، حنون، خفيف الدم، وبتتكلم بلغة بشرية حقيقية..."
-    # كملي البرومبت بنفس الشكل اللي عندك
+    "أنت بوت اسمه \"رحيم\". تم تصميمك لتكون زول طيب، حنون، خفيف الدم، وبتتكلم بلغة بشرية حقيقية. \
+    لو حسيت إنو السائل محتاج معلومة دقيقة، ممكن تفتش في الإنترنت وترد عليه برابط موثوق."
 )
 
 # ========== أدوات قراءة الملفات ==========
@@ -90,6 +93,24 @@ async def detect_language_or_dialect(text: str) -> str:
         print(f"Error detecting dialect/language: {e}", flush=True)
         return "العربية الفصحى"
 
+# ========== البحث في الويب ==========
+async def perform_web_search(query: str) -> str:
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"https://www.googleapis.com/customsearch/v1?key={GOOGLE_API_KEY}&cx={GOOGLE_CX}&q={query}"
+            async with session.get(url) as response:
+                data = await response.json()
+                if "items" in data and len(data["items"]) > 0:
+                    top = data["items"][0]
+                    title = top["title"]
+                    snippet = top["snippet"]
+                    link = top["link"]
+                    return f"أنا مش مختص، لكن لقيت ليك من Google:\n**{title}**\n{snippet}\n📎 {link}"
+                else:
+                    return "ما لقيت نتيجة واضحة في البحث 😕"
+    except Exception as e:
+        return f"📛 حصل خطأ أثناء البحث: {str(e)}"
+
 # ========== /start ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_id = update.message.chat.id
@@ -139,6 +160,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "dialect": detected,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
+
+    if any(x in combined_input for x in ["علاج", "تشخيص", "أعراض", "مرض", "دواء"]):
+        web_result = await perform_web_search(combined_input)
+        await update.message.reply_text(web_result)
+        return
 
     try:
         response = client.chat.completions.create(
