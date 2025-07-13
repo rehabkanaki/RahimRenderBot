@@ -26,6 +26,7 @@ MAX_SESSION_LENGTH = 20
 client = OpenAI(api_key=OPENAI_API_KEY)
 group_sessions = {}
 group_dialects = {}
+image_context = {}  # تخزين مؤقت للصورة لكل مستخدم
 
 # ========== Google Sheets ==========
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -110,6 +111,62 @@ async def perform_web_search(query: str) -> str:
                     return "ما لقيت نتيجة واضحة في البحث 😕"
     except Exception as e:
         return f"📛 حصل خطأ أثناء البحث: {str(e)}"
+
+# ========== تحليل الصور ==========
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    image_url = file.file_path
+
+    user_id = update.message.from_user.id
+    image_context[user_id] = image_url
+
+    await update.message.reply_text(
+        "📷 استلمت الصورة! تحب أعمل شنو فيها؟\n1️⃣ وصف\n2️⃣ قراءة النصوص\n3️⃣ تحليل مشاعر الوجوه\n4️⃣ تصنيف المحتوى\nأكتب الرقم أو الكلمة المناسبة 💡"
+    )
+
+async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id not in image_context:
+        return
+
+    image_url = image_context[user_id]
+    text = update.message.text.strip().lower()
+
+    options = {
+        "1": "وصف محتوى الصورة بدقة وبلغة بشرية.",
+        "2": "اقرأ النصوص الظاهرة داخل الصورة فقط، بدون تعليق.",
+        "3": "هل يوجد وجوه في الصورة؟ إذا نعم، صف المشاعر الظاهرة (فرح، حزن، غضب...).",
+        "4": "صنّف محتوى الصورة: هل تحتوي على طبيعة، أطعمة، أشخاص، مستندات، تصميم، إلخ؟"
+    }
+
+    prompt = options.get(text)
+    if not prompt:
+        await update.message.reply_text("⚠️ برجاء اختيار رقم من 1 إلى 4.")
+        return
+
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+    payload = {
+        "model": "gpt-4-vision-preview",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
+            }
+        ],
+        "max_tokens": 500
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
+            data = await resp.json()
+            result = data['choices'][0]['message']['content']
+
+    await update.message.reply_text(result)
+    del image_context[user_id]
 
 # ========== /start ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -232,7 +289,8 @@ application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.COMMAND, handle_message))
 application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, handle_private_message))
 application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-
+application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+application.add_handler(MessageHandler(filters.TEXT, handle_image_action))
 app = web.Application()
 app.router.add_post(f'/{BOT_TOKEN}', webhook)
 
