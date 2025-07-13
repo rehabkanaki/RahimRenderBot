@@ -162,14 +162,14 @@ async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     async with aiohttp.ClientSession() as session:
         async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
-        data = await resp.json()
+            data = await resp.json()
         
-        if "error" in data:
-            await update.message.reply_text(f"📛 حصل خطأ من OpenAI:\n{data['error']['message']}")
-            print("🔴 خطأ من OpenAI:", data)
-            return
+            if "error" in data:
+                await update.message.reply_text(f"📛 حصل خطأ من OpenAI:\n{data['error']['message']}")
+                print("🔴 خطأ من OpenAI:", data)
+                return
         
-        result = data['choices'][0]['message']['content']
+            result = data['choices'][0]['message']['content']
 
     await update.message.reply_text(result)
     del image_context[user_id]
