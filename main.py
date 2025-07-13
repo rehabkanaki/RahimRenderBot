@@ -161,7 +161,7 @@ async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE
     }
 
 async with aiohttp.ClientSession() as session:
-async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
+    async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
         data = await resp.json()
         
         if "error" in data:
