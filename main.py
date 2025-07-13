@@ -9,8 +9,6 @@ import asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import aiohttp
-
-# مكتبات قراءة الملفات
 import fitz  # PyMuPDF
 from docx import Document as DocxReader
 import pandas as pd
@@ -21,6 +19,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CX = os.getenv("GOOGLE_CX")
+IMGBB_API_KEY = os.getenv("IMGBB_API_KEY")
 MAX_SESSION_LENGTH = 20
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -58,7 +57,7 @@ def extract_text_from_excel(file_path):
         preview = df.head(10)
         return preview.to_string(index=False)
     except Exception as e:
-        return f"📛 حصل خطأ أثناء قراءة الإكسل: {str(e)}"
+        return f"\ud83d\udccb حصل خطأ أثناء قراءة الإكسل: {str(e)}"
 
 # ========== حفظ في Google Sheets ==========
 def save_message_to_sheet(data):
@@ -71,9 +70,9 @@ def save_message_to_sheet(data):
             data["dialect"],
             data["text"]
         ])
-        print("✅ Saved to Google Sheet", flush=True)
+        print("\u2705 Saved to Google Sheet", flush=True)
     except Exception as e:
-        print(f"❌ Error saving to Google Sheet: {e}", flush=True)
+        print(f"\u274c Error saving to Google Sheet: {e}", flush=True)
 
 # ========== كشف اللهجة ==========
 async def detect_language_or_dialect(text: str) -> str:
@@ -106,23 +105,44 @@ async def perform_web_search(query: str) -> str:
                     title = top["title"]
                     snippet = top["snippet"]
                     link = top["link"]
-                    return f"أنا مش مختص، لكن لقيت ليك من Google:\n**{title}**\n{snippet}\n📎 {link}"
+                    return f"أنا مش مختص، لكن لقيت ليك من Google:\n**{title}**\n{snippet}\n\ud83d\udccc {link}"
                 else:
-                    return "ما لقيت نتيجة واضحة في البحث 😕"
+                    return "ما لقيت نتيجة واضحة في البحث \ud83d\ude15"
     except Exception as e:
-        return f"📛 حصل خطأ أثناء البحث: {str(e)}"
+        return f"\ud83d\udccb حصل خطأ أثناء البحث: {str(e)}"
+
+# ========== رفع الصورة والحصول على رابط عام ==========
+async def upload_to_imgbb(image_path):
+    try:
+        with open(image_path, "rb") as file:
+            encoded = file.read()
+            data = aiohttp.FormData()
+            data.add_field("image", encoded, filename="image.jpg", content_type="image/jpeg")
+            async with aiohttp.ClientSession() as session:
+                async with session.post(f"https://api.imgbb.com/1/upload?key={IMGBB_API_KEY}", data=data) as resp:
+                    result = await resp.json()
+                    return result["data"]["url"]
+    except Exception as e:
+        print(f"Image upload failed: {e}", flush=True)
+        return None
 
 # ========== تحليل الصور ==========
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
-    image_url = file.file_path
+    image_path = tempfile.mktemp(suffix=".jpg")
+    await file.download_to_drive(image_path)
+
+    public_url = await upload_to_imgbb(image_path)
+    if not public_url:
+        await update.message.reply_text("\ud83d\udeab ما قدرت أرفع الصورة، جرّب تاني.")
+        return
 
     user_id = update.message.from_user.id
-    image_context[user_id] = image_url
+    image_context[user_id] = public_url
 
     await update.message.reply_text(
-        "📷 استلمت الصورة! تحب أعمل شنو فيها؟\n1️⃣ وصف\n2️⃣ قراءة النصوص\n3️⃣ تحليل مشاعر الوجوه\n4️⃣ تصنيف المحتوى\nأكتب الرقم أو الكلمة المناسبة 💡"
+        "\ud83d\udcf7 استلمت الصورة! تحب أعمل شنو فيها؟\n1\ufe0f\u20e3 وصف\n2\ufe0f\u20e3 قراءة النصوص\n3\ufe0f\u20e3 تحليل مشاعر الوجوه\n4\ufe0f\u20e3 تصنيف المحتوى\nأكتب الرقم أو الكلمة المناسبة \ud83d\udca1"
     )
 
 async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -142,18 +162,18 @@ async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     prompt = options.get(text)
     if not prompt:
-        await update.message.reply_text("⚠️ برجاء اختيار رقم من 1 إلى 4.")
+        await update.message.reply_text("\u26a0\ufe0f برجاء اختيار رقم من 1 إلى 4.")
         return
 
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     payload = {
-        "model":"gpt-4o",
+        "model": "gpt-4o",
         "messages": [
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_url}}
+                    {"type": "image_url", "image_url": {"url": image_url, "detail": "auto"}}
                 ]
             }
         ],
@@ -163,12 +183,12 @@ async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE
     async with aiohttp.ClientSession() as session:
         async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
             data = await resp.json()
-        
+
             if "error" in data:
-                await update.message.reply_text(f"📛 حصل خطأ من OpenAI:\n{data['error']['message']}")
-                print("🔴 خطأ من OpenAI:", data)
+                await update.message.reply_text(f"\ud83d\udccb حصل خطأ من OpenAI:\n{data['error']['message']}")
+                print("\ud83d\udd34 خطأ من OpenAI:", data)
                 return
-        
+
             result = data['choices'][0]['message']['content']
 
     await update.message.reply_text(result)
