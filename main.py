@@ -147,7 +147,7 @@ async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     payload = {
-        "model": "gpt-4o",
+        "model":"gpt-4o",
         "messages": [
             {
                 "role": "user",
