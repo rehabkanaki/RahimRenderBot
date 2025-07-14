@@ -9,7 +9,6 @@ import asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import aiohttp
-import base64
 
 # مكتبات قراءة الملفات
 import fitz  # PyMuPDF
@@ -118,65 +117,14 @@ async def perform_web_search(query: str) -> str:
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
-    image_bytes = await file.download_as_bytearray()
 
-    # ارفع الصورة إلى imgbb
-    imgbb_api_key = IMGBB_API_KEY
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://api.imgbb.com/1/upload",
-            data={"key": imgbb_api_key, "image": base64.b64encode(image_bytes).decode()}
-        ) as resp:
-            result = await resp.json()
-            if not result.get("success"):
-                await update.message.reply_text("📛 حصل خطأ أثناء رفع الصورة لموقع خارجي.")
-                return
-             # 🔥 هنا التعديل المهم
-            image_url = result["data"]["image"]["url"]
+    # ✨ هنا المفتاح السحري
+    image_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
 
     user_id = update.message.from_user.id
     image_context[user_id] = image_url
 
     await update.message.reply_text("✅ استلمت الصورة، تحب أعمل فيها شنو؟")
-
-async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id not in image_context:
-        await update.message.reply_text("🚫 ما عندي صورة حالياً ليك، أرسل صورة الأول.")
-        return
-
-    prompt = update.message.text.strip()
-    image_data_url = image_context[user_id]
-
-    payload = {
-        "model": "gpt-4o",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_data_url}}
-                ]
-            }
-        ],
-        "max_tokens": 500
-    }
-
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-
-    async with aiohttp.ClientSession() as session:
-        async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
-            data = await resp.json()
-
-            if "error" in data:
-                await update.message.reply_text(f"📛 حصل خطأ:\n{data['error']['message']}")
-                print("🔴 خطأ OpenAI:", data)
-                return
-
-            result = data['choices'][0]['message']['content']
-
-    await update.message.reply_text(result)
-    del image_context[user_id]
 
 # ========== /start ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
