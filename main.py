@@ -131,7 +131,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not result.get("success"):
                 await update.message.reply_text("📛 حصل خطأ أثناء رفع الصورة لموقع خارجي.")
                 return
-            image_url = result["data"]["url"]
+             # 🔥 هنا التعديل المهم
+            image_url = result["data"]["image"]["url"]
 
     user_id = update.message.from_user.id
     image_context[user_id] = image_url
