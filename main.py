@@ -128,13 +128,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ استلمت الصورة، تحب أعمل فيها شنو؟")
 
 async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id not in image_context:
-        await update.message.reply_text("🚫 ما عندي صورة حالياً ليك، أرسل صورة الأول.")
-        return
-
+    # تجاهل الصورة المخزنة مؤقتاً بس للاختبار
     prompt = update.message.text.strip()
-    image_url = image_context[user_id]
+    
+    # استخدمي رابط صورة مباشر واضح
+    image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/640px-PNG_transparency_demonstration_1.png"
 
     payload = {
         "model": "gpt-4o",
@@ -164,7 +162,6 @@ async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE
             result = data['choices'][0]['message']['content']
 
     await update.message.reply_text(result)
-    del image_context[user_id]
 
 # ========== /start ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
