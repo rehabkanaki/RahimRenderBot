@@ -13,6 +13,7 @@ import aiohttp
 # مكتبات قراءة الملفات
 import fitz  # PyMuPDF
 from docx import Document as DocxReader
+from pptx import Presentation
 import pandas as pd
 import tempfile
 
@@ -52,6 +53,18 @@ def extract_text_from_pdf(file_path):
 def extract_text_from_docx(file_path):
     doc = DocxReader(file_path)
     return "\n".join([para.text for para in doc.paragraphs])
+
+def extract_text_from_pptx(file_path):
+    try:
+        prs = Presentation(file_path)
+        text_runs = []
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "text"):
+                    text_runs.append(shape.text)
+        return "\n".join(text_runs)
+    except Exception as e:
+        return f"📛 حصل خطأ أثناء قراءة ملف PowerPoint: {str(e)}"
 
 def extract_text_from_excel(file_path):
     try:
@@ -257,8 +270,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = extract_text_from_docx(temp.name)
         elif file_ext in ["xlsx", "xls"]:
             text = extract_text_from_excel(temp.name)
+        elif file_ext == "pptx":
+            text = extract_text_from_pptx(temp.name)
         else:
-            await update.message.reply_text("حالياً بقدر أقرأ ملفات PDF, Word و Excel فقط.")
+            await update.message.reply_text("حالياً بقدر أقرأ ملفات PDF, Word, Excel و PowerPoint فقط.")
             return
 
         if len(text) > 2000:
