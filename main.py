@@ -126,6 +126,45 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("✅ استلمت الصورة، تحب أعمل فيها شنو؟")
 
+async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id not in image_context:
+        await update.message.reply_text("🚫 ما عندي صورة حالياً ليك، أرسل صورة الأول.")
+        return
+
+    prompt = update.message.text.strip()
+    image_url = image_context[user_id]
+
+    payload = {
+        "model": "gpt-4o",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
+            }
+        ],
+        "max_tokens": 500
+    }
+
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
+            data = await resp.json()
+
+            if "error" in data:
+                await update.message.reply_text(f"📛 حصل خطأ:\n{data['error']['message']}")
+                print("🔴 خطأ OpenAI:", data)
+                return
+
+            result = data['choices'][0]['message']['content']
+
+    await update.message.reply_text(result)
+    del image_context[user_id]
+
 # ========== /start ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_id = update.message.chat.id
