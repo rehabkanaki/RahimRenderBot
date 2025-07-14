@@ -119,12 +119,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file = await context.bot.get_file(photo.file_id)
     image_bytes = await file.download_as_bytearray()
 
-    # تحويل الصورة إلى base64
-    image_base64 = base64.b64encode(image_bytes).decode()
-    image_data_url = f"data:image/jpeg;base64,{image_base64}"
+    # ارفع الصورة إلى imgbb
+    imgbb_api_key = os.getenv("IMGBB_API_KEY")
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://api.imgbb.com/1/upload",
+            data={"key": imgbb_api_key, "image": base64.b64encode(image_bytes).decode()}
+        ) as resp:
+            result = await resp.json()
+            if not result.get("success"):
+                await update.message.reply_text("📛 حصل خطأ أثناء رفع الصورة لموقع خارجي.")
+                return
+            image_url = result["data"]["url"]
 
     user_id = update.message.from_user.id
-    image_context[user_id] = image_data_url
+    image_context[user_id] = image_url
 
     await update.message.reply_text("✅ استلمت الصورة، تحب أعمل فيها شنو؟")
 
