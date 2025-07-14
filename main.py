@@ -22,6 +22,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CX = os.getenv("GOOGLE_CX")
+IMGBB_API_KEY = os.getenv("IMGBB_API_KEY") 
 MAX_SESSION_LENGTH = 20
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -120,7 +121,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     image_bytes = await file.download_as_bytearray()
 
     # ارفع الصورة إلى imgbb
-    imgbb_api_key = os.getenv("IMGBB_API_KEY")
+    imgbb_api_key = IMGBB_API_KEY
     async with aiohttp.ClientSession() as session:
         async with session.post(
             "https://api.imgbb.com/1/upload",
