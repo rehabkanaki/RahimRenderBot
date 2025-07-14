@@ -117,9 +117,19 @@ async def perform_web_search(query: str) -> str:
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
+    image_bytes = await file.download_as_bytearray()
 
-    # ✨ هنا المفتاح السحري
-    image_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
+    async with aiohttp.ClientSession() as session:
+        data = aiohttp.FormData()
+        data.add_field("file", image_bytes, filename="image.jpg", content_type="image/jpeg")
+
+        async with session.post("https://file.io/?expires=1d", data=data) as resp:
+            result = await resp.json()
+            if not result.get("success"):
+                await update.message.reply_text("📛 حصل خطأ أثناء رفع الصورة.")
+                return
+
+            image_url = result["link"]  # رابط مباشر فعلاً
 
     user_id = update.message.from_user.id
     image_context[user_id] = image_url
