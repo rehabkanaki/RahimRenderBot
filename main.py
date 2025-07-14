@@ -9,6 +9,7 @@ import asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import aiohttp
+import base64
 
 # مكتبات قراءة الملفات
 import fitz  # PyMuPDF
@@ -116,34 +117,26 @@ async def perform_web_search(query: str) -> str:
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
-    image_url = file.file_path
+    image_bytes = await file.download_as_bytearray()
+
+    # تحويل الصورة إلى base64
+    image_base64 = base64.b64encode(image_bytes).decode()
+    image_data_url = f"data:image/jpeg;base64,{image_base64}"
 
     user_id = update.message.from_user.id
-    image_context[user_id] = image_url
+    image_context[user_id] = image_data_url
 
-    await update.message.reply_text("استلمت الصورة، تحب أعمل فيها شنو؟\n1. وصف\n2. قراءة النصوص\n3. تحليل مشاعر الوجوه\n4. تصنيف المحتوى")
+    await update.message.reply_text("✅ استلمت الصورة، تحب أعمل فيها شنو؟")
 
 async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id not in image_context:
+        await update.message.reply_text("🚫 ما عندي صورة حالياً ليك، أرسل صورة الأول.")
         return
 
-    image_url = image_context[user_id]
-    text = update.message.text.strip().lower()
+    prompt = update.message.text.strip()
+    image_data_url = image_context[user_id]
 
-    options = {
-        "1": "وصف محتوى الصورة بدقة وبلغة بشرية.",
-        "2": "اقرأ النصوص الظاهرة داخل الصورة فقط، بدون تعليق.",
-        "3": "هل يوجد وجوه في الصورة؟ إذا نعم، صف المشاعر الظاهرة (فرح، حزن، غضب...).",
-        "4": "صنّف محتوى الصورة: هل تحتوي على طبيعة، أطعمة، أشخاص، مستندات، تصميم، إلخ؟"
-    }
-
-    prompt = options.get(text)
-    if not prompt:
-        await update.message.reply_text("⚠️ برجاء اختيار رقم من 1 إلى 4.")
-        return
-
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     payload = {
         "model": "gpt-4o",
         "messages": [
@@ -151,20 +144,22 @@ async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_url}}
+                    {"type": "image_url", "image_url": {"url": image_data_url}}
                 ]
             }
         ],
         "max_tokens": 500
     }
 
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+
     async with aiohttp.ClientSession() as session:
         async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
             data = await resp.json()
 
             if "error" in data:
-                await update.message.reply_text(f"📛 حصل خطأ من OpenAI:\n{data['error']['message']}")
-                print("🔴 خطأ من OpenAI:", data)
+                await update.message.reply_text(f"📛 حصل خطأ:\n{data['error']['message']}")
+                print("🔴 خطأ OpenAI:", data)
                 return
 
             result = data['choices'][0]['message']['content']
