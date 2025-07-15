@@ -202,51 +202,64 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.from_user.full_name
 
     if update.message.reply_to_message and update.message.reply_to_message.text:
-        target_text = update.message.reply_to_message.text
-        combined_input = f"{update.message.text}\n\nالرسالة المردود عليها:\n{target_text}"
+        target_text = update.message.reply_to_message.text.strip()
+        prompt_text = update.message.text.strip()
     else:
-        combined_input = update.message.text
+        await update.message.reply_text("📌 لو عايز تلخيص، ترجمة، أو MCQs، رد على النص المراد مع كتابة الأمر المناسب.")
+        return
 
-    if group_id not in group_sessions:
-        detected = await detect_language_or_dialect(combined_input)
-        group_dialects[group_id] = detected
-        group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
-    else:
-        detected = group_dialects.get(group_id, "العربية الفصحى")
-
-    group_sessions[group_id].append({"role": "user", "content": combined_input})
-    group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
-
+    # حفظ المحادثة في الشيت
     save_message_to_sheet({
         "user_id": user_id,
         "user_name": user_name,
         "group_id": group_id,
-        "text": combined_input,
-        "dialect": detected,
+        "text": f"{prompt_text}\n↪️ {target_text}",
+        "dialect": "العربية",
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
 
-    if any(x in combined_input for x in ["علاج", "تشخيص", "أعراض", "مرض", "دواء"]):
-        web_result = await perform_web_search(combined_input)
-    
-        if "ما لقيت نتيجة واضحة" in web_result or "📛 حصل خطأ" in web_result:
-            await update.message.reply_text("ما لقيت مصدر خارجي، لكن خليني أشرح ليك من معرفتي العامة...")
-        else:
-            await update.message.reply_text(web_result)
-            return  # لو نجح في البحث، ما في داعي يرجع لـ GPT
+    # المهام الخاصة باستخدام GPT-3.5
+    if "تلخيص" in prompt_text:
+        task_prompt = f"لخص النص التالي بلغة بسيطة ومفهومة:\n\n{target_text}"
+        model = "gpt-3.5-turbo"
+    elif "ترجم" in prompt_text or "ترجمة" in prompt_text:
+        task_prompt = f"ترجم النص التالي إلى العربية:\n\n{target_text}"
+        model = "gpt-3.5-turbo"
+    elif "mcq" in prompt_text or "اختر" in prompt_text or "أسئلة" in prompt_text:
+        task_prompt = f"أنشئ 3 أسئلة اختيار من متعدد (MCQs) مع الإجابات، من النص التالي:\n\n{target_text}"
+        model = "gpt-3.5-turbo"
+    else:
+        # متابعة الجلسة العادية مع GPT-4o
+        combined_input = f"{prompt_text}\n\nالرسالة المردود عليها:\n{target_text}"
+        if group_id not in group_sessions:
+            group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
+        group_sessions[group_id].append({"role": "user", "content": combined_input})
+        group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
 
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=group_sessions[group_id]
+            )
+            reply = response.choices[0].message.content.strip()
+            group_sessions[group_id].append({"role": "assistant", "content": reply})
+            await update.message.reply_text(reply)
+        except Exception as e:
+            await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
+            print(f"OpenAI error (gpt-4o): {e}", flush=True)
+        return
+
+    # استدعاء GPT-3.5 للمهمة المطلوبة
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=group_sessions[group_id]
+            model=model,
+            messages=[{"role": "user", "content": task_prompt}]
         )
         reply = response.choices[0].message.content.strip()
-        group_sessions[group_id].append({"role": "assistant", "content": reply})
-        group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
         await update.message.reply_text(reply)
     except Exception as e:
-        await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
-        print(f"OpenAI error: {e}", flush=True)
+        await update.message.reply_text("📛 حصل خطأ أثناء تنفيذ المهمة باستخدام GPT-3.5.")
+        print(f"OpenAI error (gpt-3.5): {e}", flush=True)
 
 # ========== الخاص ==========
 async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
