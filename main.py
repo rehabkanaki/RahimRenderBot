@@ -282,6 +282,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
 
+    # ======= تنبيه عند الاستفسارات البحثية =======
+    keywords = ["بحث", "دراسة", "ورقة علمية", "تفاصيل علمية", "paper", "research", "study"]
+    if any(k in combined_input.lower() for k in keywords):
+        await update.message.reply_text(
+            "📚 دي نتائج من الويب، ولو داير بحث علمي مفصل ممكن أفتح ليك من Google Scholar أو Semantic Scholar."
+        )
+
     # لو في كلمات حساسة طبية، يتم البحث أولاً
     if any(x in combined_input for x in ["علاج", "تشخيص", "أعراض", "مرض", "دواء"]):
         web_result = await perform_web_search(combined_input)
@@ -290,7 +297,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     try:
-        model = "gpt-4o" if "تحليل صورة" in combined_input or "معلومة دقيقة" in combined_input else "gpt-3.5-turbo"
+        model = "gpt-4o" if "معلومة دقيقة" in combined_input else "gpt-3.5-turbo"
         response = client.chat.completions.create(
             model=model,
             messages=group_sessions[group_id],
