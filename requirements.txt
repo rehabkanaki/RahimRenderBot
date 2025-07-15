@@ -8,4 +8,5 @@ PyMuPDF
 pandas
 openpyxl
 python-pptx
-
+transformers
+torch
