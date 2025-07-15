@@ -9,6 +9,7 @@ import asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import aiohttp
+from summarizer import summarize_text
 
 # مكتبات قراءة الملفات
 import fitz  # PyMuPDF
