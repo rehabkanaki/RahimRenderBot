@@ -126,6 +126,62 @@ async def perform_web_search(query: str) -> str:
     except Exception as e:
         return f"📛 حصل خطأ أثناء البحث: {str(e)}"
 
+# ========== تحليل الصور (جاهز للربط لاحقًا) ==========
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    image_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
+
+    user_id = update.message.from_user.id
+    image_context[user_id] = image_url
+
+    await update.message.reply_text("✅ استلمت الصورة، تحب أعمل فيها شنو؟")
+    # تقدر تفعّلي هنا تحليل تلقائي لو دايرة
+
+async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    prompt = update.message.text.strip()
+    user_id = update.message.from_user.id
+
+    if user_id not in image_context:
+        await update.message.reply_text("📸 ما لقيت صورة مخزنة. أرسل صورة الأول.")
+        return
+
+    image_url = image_context[user_id]
+
+    # 🔁 هنا تفعّلي الأداة الخارجية لاحقًا (مثال: استدعاء Replicate، HuggingFace، أو OCR)
+    # حالياً النموذج ما مفعل، فحنستخدم GPT-4o كاختبار داخلي.
+
+    payload = {
+        "model": "gpt-4o",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
+            }
+        ],
+        "max_tokens": 500
+    }
+
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
+            data = await resp.json()
+
+            if "error" in data:
+                await update.message.reply_text(f"📛 حصل خطأ:\n{data['error']['message']}")
+                print("🔴 خطأ OpenAI:", data)
+                return
+
+            result = data['choices'][0]['message']['content']
+            await update.message.reply_text(result)
+
+    # 🔚 بعد التحليل، احذف الصورة من الذاكرة لو داير تنظف:
+    # del image_context[user_id]
+
 # ========== تحليل الصور ==========
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
