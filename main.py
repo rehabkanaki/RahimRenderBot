@@ -282,14 +282,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
 
-    # ======= تنبيه عند الاستفسارات البحثية =======
-    keywords = ["بحث", "دراسة", "ورقة علمية", "تفاصيل علمية", "paper", "research", "study"]
-    if any(k in combined_input.lower() for k in keywords):
-        await update.message.reply_text(
-            "📚 دي نتائج من الويب، ولو داير بحث علمي مفصل ممكن أفتح ليك من Google Scholar أو Semantic Scholar."
-        )
-
-    # لو في كلمات حساسة طبية، يتم البحث أولاً
+    # ======= لو في كلمات طبية، يتم البحث أولاً =======
     if any(x in combined_input for x in ["علاج", "تشخيص", "أعراض", "مرض", "دواء"]):
         web_result = await perform_web_search(combined_input)
         if "ما لقيت نتيجة واضحة" not in web_result and "📛 حصل خطأ" not in web_result:
@@ -307,14 +300,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         group_sessions[group_id].append({"role": "assistant", "content": full_reply})
         group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
 
-        # تقسيم الرد الطويل إلى دفعات تلقائياً
-        async def send_chunks(text: str, chunk_size: int = 1500):
-            for i in range(0, len(text), chunk_size):
-                chunk = text[i:i + chunk_size]
+        # تقسيم الرد الطويل إلى دفعات
+        async def send_in_chunks(text, chunk_size=1500):
+            chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+            for chunk in chunks:
                 await update.message.reply_text(chunk)
                 await asyncio.sleep(1)
 
-        await send_chunks(full_reply)
+        await send_in_chunks(full_reply)
 
     except Exception as e:
         await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
