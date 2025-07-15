@@ -202,64 +202,60 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.from_user.full_name
 
     if update.message.reply_to_message and update.message.reply_to_message.text:
-        target_text = update.message.reply_to_message.text.strip()
-        prompt_text = update.message.text.strip()
+        target_text = update.message.reply_to_message.text
+        combined_input = f"{update.message.text}\n\nالرسالة المردود عليها:\n{target_text}"
     else:
-        await update.message.reply_text("📌 لو عايز تلخيص، ترجمة، أو MCQs، رد على النص المراد مع كتابة الأمر المناسب.")
-        return
+        combined_input = update.message.text
 
-    # حفظ المحادثة في الشيت
+    if group_id not in group_sessions:
+        detected = await detect_language_or_dialect(combined_input)
+        group_dialects[group_id] = detected
+        group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
+    else:
+        detected = group_dialects.get(group_id, "العربية الفصحى")
+
+    group_sessions[group_id].append({"role": "user", "content": combined_input})
+    group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
+
     save_message_to_sheet({
         "user_id": user_id,
         "user_name": user_name,
         "group_id": group_id,
-        "text": f"{prompt_text}\n↪️ {target_text}",
-        "dialect": "العربية",
+        "text": combined_input,
+        "dialect": detected,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
 
-    # المهام الخاصة باستخدام GPT-3.5
-    if "تلخيص" in prompt_text:
-        task_prompt = f"لخص النص التالي بلغة بسيطة ومفهومة:\n\n{target_text}"
-        model = "gpt-3.5-turbo"
-    elif "ترجم" in prompt_text or "ترجمة" in prompt_text:
-        task_prompt = f"ترجم النص التالي إلى العربية:\n\n{target_text}"
-        model = "gpt-3.5-turbo"
-    elif "mcq" in prompt_text or "اختر" in prompt_text or "أسئلة" in prompt_text:
-        task_prompt = f"أنشئ 3 أسئلة اختيار من متعدد (MCQs) مع الإجابات، من النص التالي:\n\n{target_text}"
-        model = "gpt-3.5-turbo"
-    else:
-        # متابعة الجلسة العادية مع GPT-4o
-        combined_input = f"{prompt_text}\n\nالرسالة المردود عليها:\n{target_text}"
-        if group_id not in group_sessions:
-            group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
-        group_sessions[group_id].append({"role": "user", "content": combined_input})
-        group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
+    # لو في كلمات حساسة طبية، يتم البحث أولاً
+    if any(x in combined_input for x in ["علاج", "تشخيص", "أعراض", "مرض", "دواء"]):
+        web_result = await perform_web_search(combined_input)
+        if "ما لقيت نتيجة واضحة" not in web_result and "📛 حصل خطأ" not in web_result:
+            await update.message.reply_text(web_result)
+            return
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=group_sessions[group_id]
-            )
-            reply = response.choices[0].message.content.strip()
-            group_sessions[group_id].append({"role": "assistant", "content": reply})
-            await update.message.reply_text(reply)
-        except Exception as e:
-            await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
-            print(f"OpenAI error (gpt-4o): {e}", flush=True)
-        return
-
-    # استدعاء GPT-3.5 للمهمة المطلوبة
     try:
+        model = "gpt-4o" if "تحليل صورة" in combined_input or "معلومة دقيقة" in combined_input else "gpt-3.5-turbo"
         response = client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": task_prompt}]
+            messages=group_sessions[group_id],
+            max_tokens=2000,
         )
-        reply = response.choices[0].message.content.strip()
-        await update.message.reply_text(reply)
+        full_reply = response.choices[0].message.content.strip()
+        group_sessions[group_id].append({"role": "assistant", "content": full_reply})
+        group_sessions[group_id] = group_sessions[group_id][-MAX_SESSION_LENGTH:]
+
+        # تقسيم الرد الطويل إلى دفعات تلقائياً
+        async def send_chunks(text: str, chunk_size: int = 1500):
+            for i in range(0, len(text), chunk_size):
+                chunk = text[i:i + chunk_size]
+                await update.message.reply_text(chunk)
+                await asyncio.sleep(1)
+
+        await send_chunks(full_reply)
+
     except Exception as e:
-        await update.message.reply_text("📛 حصل خطأ أثناء تنفيذ المهمة باستخدام GPT-3.5.")
-        print(f"OpenAI error (gpt-3.5): {e}", flush=True)
+        await update.message.reply_text("حصل خطأ في الذكاء الصناعي 😔")
+        print(f"OpenAI error: {e}", flush=True)
 
 # ========== الخاص ==========
 async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
