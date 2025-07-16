@@ -457,12 +457,12 @@ application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 application.add_handler(MessageHandler(filters.TEXT, handle_image_action))
 
 # إضافة أوامر الترفيه والمحادثة
-application.add_handler(CommandHandler("أغنية", suggest_song))
-application.add_handler(CommandHandler("كتاب", suggest_book))
-application.add_handler(CommandHandler("فيلم", suggest_movie))
-application.add_handler(CommandHandler("نقاش", start_discussion))
-application.add_handler(CommandHandler("لعبة", play_game))
-application.add_handler(CommandHandler("سؤال", answer_question))
+application.add_handler(CommandHandler("song", suggest_song))
+application.add_handler(CommandHandler("book", suggest_book))
+application.add_handler(CommandHandler("movie", suggest_movie))
+application.add_handler(CommandHandler("discussion", start_discussion))
+application.add_handler(CommandHandler("game", play_game))
+application.add_handler(CommandHandler("question", answer_question))
 
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, friendly_reply))
 app = web.Application()
