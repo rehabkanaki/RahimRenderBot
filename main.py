@@ -9,7 +9,7 @@ import asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import aiohttp
-
+import random
 # مكتبات قراءة الملفات
 import fitz  # PyMuPDF
 from docx import Document as DocxReader
@@ -126,6 +126,92 @@ async def perform_web_search(query: str) -> str:
     except Exception as e:
         return f"📛 حصل خطأ أثناء البحث: {str(e)}"
 
+# ========== دوال ترفيه ومحادثة عامة ==========
+async def call_openai_chat(prompt: str, max_tokens=500, temperature=0.7) -> str:
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"OpenAI error in call_openai_chat: {e}")
+        return "حصل خطأ أثناء التواصل مع الذكاء الصناعي."
+
+# أمر /أغنية
+async def suggest_song(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args).strip()
+    if not query:
+        await update.message.reply_text("اكتب لي نوع أو مزاج الأغنية عشان أساعدك.")
+        return
+    prompt = f"اقترح لي قائمة أغاني تناسب المزاج أو النوع التالي: {query}"
+    response = await call_openai_chat(prompt)
+    await update.message.reply_text(response)
+
+# أمر /كتاب
+async def suggest_book(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args).strip()
+    if not query:
+        await update.message.reply_text("اكتب لي نوع الكتاب اللي تحبه.")
+        return
+    prompt = f"اقترح لي كتب مميزة من نوع: {query} مع ملخص بسيط لكل كتاب."
+    response = await call_openai_chat(prompt)
+    await update.message.reply_text(response)
+
+# أمر /فيلم
+async def suggest_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args).strip()
+    if not query:
+        await update.message.reply_text("اكتب لي نوع الفيلم اللي تحبه.")
+        return
+    prompt = f"اقترح لي أفلام مميزة من نوع: {query} مع ملخص بسيط لكل فيلم."
+    response = await call_openai_chat(prompt)
+    await update.message.reply_text(response)
+
+# أمر /نقاش
+async def start_discussion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    topic = " ".join(context.args).strip()
+    if not topic:
+        await update.message.reply_text("اكتب لي موضوع للنقاش.")
+        return
+    prompt = f"ابدأ نقاش ترفيهي عن الموضوع التالي: {topic}. اسأل المتابعين أسئلة تحفزهم على التفاعل."
+    response = await call_openai_chat(prompt)
+    await update.message.reply_text(response)
+
+# أمر /لعبة
+brain_games = [
+    "فكر في رقم بين 1 و 10",
+    "حل اللغز: ما هو الشيء الذي له أسنان ولا يعض؟",
+    "إذا كان اليوم الإثنين، ما هو اليوم بعد 100 يوم؟",
+]
+
+async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    game = random.choice(brain_games)
+    await update.message.reply_text(f"لعبتنا اليوم: {game}")
+
+# أمر /سؤال
+async def answer_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    question = " ".join(context.args).strip()
+    if not question:
+        await update.message.reply_text("اكتب لي السؤال اللي عايز تعرف إجابته.")
+        return
+    prompt = f"جاوب على السؤال التالي ببساطة ووضوح: {question}"
+    response = await call_openai_chat(prompt)
+    await update.message.reply_text(response)
+
+# ردود ودية عشوائية على الرسائل العادية (غير أوامر)
+async def friendly_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    texts = [
+        "جميل الكلام دا 😊",
+        "حلو أوي! 😊",
+        "مبسوط من تواصلك معانا! 🌟",
+        "دا كلام جميل، خلي نواصل 😊",
+    ]
+    if update.message.text and not update.message.text.startswith("/"):
+        await update.message.reply_text(random.choice(texts))
+        
 # ========== تحليل الصور (جاهز للربط لاحقًا) ==========
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
@@ -359,13 +445,26 @@ async def webhook(request):
     return web.Response(text="OK")
 
 # ========== تشغيل التطبيق ==========
+# ========== تحديث إضافة المعالجات للأوامر في main ==========
 application = Application.builder().token(BOT_TOKEN).build()
+
+# الأوامر الأساسية الموجودة
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.COMMAND, handle_message))
 application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, handle_private_message))
 application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 application.add_handler(MessageHandler(filters.TEXT, handle_image_action))
+
+# إضافة أوامر الترفيه والمحادثة
+application.add_handler(CommandHandler("أغنية", suggest_song))
+application.add_handler(CommandHandler("كتاب", suggest_book))
+application.add_handler(CommandHandler("فيلم", suggest_movie))
+application.add_handler(CommandHandler("نقاش", start_discussion))
+application.add_handler(CommandHandler("لعبة", play_game))
+application.add_handler(CommandHandler("سؤال", answer_question))
+
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, friendly_reply))
 app = web.Application()
 app.router.add_post(f'/{BOT_TOKEN}', webhook)
 
