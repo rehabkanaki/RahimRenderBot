@@ -205,7 +205,7 @@ async def answer_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def friendly_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texts = [
         "جميل الكلام دا 😊",
-        "حلو أوي! 😊",
+        "حلو شديد! 😊",
         "مبسوط من تواصلك معانا! 🌟",
         "دا كلام جميل، خلي نواصل 😊",
     ]
