@@ -344,10 +344,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.from_user.full_name
 
     # ✅ التحقق من الكلمات المفتاحية للتريند
-    response = check_trend_trigger(user_message)
-    if response:
-        await context.bot.send_message(chat_id=group_id, text=response)
-        return  # نوقف هنا لو حصل تطابق مع تريند
+    # داخل دالة handle_message
+response = check_trend_trigger(user_message)  # يفحص من trends.json
+if not response:
+    response = check_keyword_trend(user_message)  # يفحص من trend_keywords.py
+
+if response:
+    await context.bot.send_message(chat_id=group_id, text=response)
+    return # نوقف هنا لو حصل تطابق مع تريند
 
     if update.message.reply_to_message and update.message.reply_to_message.text:
         target_text = update.message.reply_to_message.text
