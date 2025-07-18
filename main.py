@@ -212,112 +212,6 @@ async def friendly_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text and not update.message.text.startswith("/"):
         await update.message.reply_text(random.choice(texts))
         
-# ========== تحليل الصور (جاهز للربط لاحقًا) ==========
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photo = update.message.photo[-1]
-    file = await context.bot.get_file(photo.file_id)
-    image_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
-
-    user_id = update.message.from_user.id
-    image_context[user_id] = image_url
-
-    await update.message.reply_text("✅ استلمت الصورة، تحب أعمل فيها شنو؟")
-    # تقدر تفعّلي هنا تحليل تلقائي لو دايرة
-
-async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    prompt = update.message.text.strip()
-    user_id = update.message.from_user.id
-
-    if user_id not in image_context:
-        await update.message.reply_text("📸 ما لقيت صورة مخزنة. أرسل صورة الأول.")
-        return
-
-    image_url = image_context[user_id]
-
-    # 🔁 هنا تفعّلي الأداة الخارجية لاحقًا (مثال: استدعاء Replicate، HuggingFace، أو OCR)
-    # حالياً النموذج ما مفعل، فحنستخدم GPT-4o كاختبار داخلي.
-
-    payload = {
-        "model": "gpt-4o",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
-            }
-        ],
-        "max_tokens": 500
-    }
-
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-
-    async with aiohttp.ClientSession() as session:
-        async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
-            data = await resp.json()
-
-            if "error" in data:
-                await update.message.reply_text(f"📛 حصل خطأ:\n{data['error']['message']}")
-                print("🔴 خطأ OpenAI:", data)
-                return
-
-            result = data['choices'][0]['message']['content']
-            await update.message.reply_text(result)
-
-    # 🔚 بعد التحليل، احذف الصورة من الذاكرة لو داير تنظف:
-    # del image_context[user_id]
-
-# ========== تحليل الصور ==========
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photo = update.message.photo[-1]
-    file = await context.bot.get_file(photo.file_id)
-    image_url = file.file_path  # هذا رابط الصورة الداخلي بتلقرام
-
-    if not image_url.startswith("https://"):
-        image_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
-
-    user_id = update.message.from_user.id
-    image_context[user_id] = image_url
-
-    await update.message.reply_text("✅ استلمت الصورة، تحب أعمل فيها شنو؟")
-
-async def handle_image_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # تجاهل الصورة المخزنة مؤقتاً بس للاختبار
-    prompt = update.message.text.strip()
-    
-    # استخدمي رابط صورة مباشر واضح
-    image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/640px-PNG_transparency_demonstration_1.png"
-
-    payload = {
-        "model": "gpt-4o",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
-            }
-        ],
-        "max_tokens": 500
-    }
-
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-
-    async with aiohttp.ClientSession() as session:
-        async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as resp:
-            data = await resp.json()
-
-            if "error" in data:
-                await update.message.reply_text(f"📛 حصل خطأ:\n{data['error']['message']}")
-                print("🔴 خطأ OpenAI:", data)
-                return
-
-            result = data['choices'][0]['message']['content']
-
-    await update.message.reply_text(result)
-
 # ========== /start ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_id = update.message.chat.id
@@ -354,7 +248,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return  # بعد ما أرسل الترند نوقف
 
     # استكمال باقي الكود العادي
-
     if update.message.reply_to_message and update.message.reply_to_message.text:
         target_text = update.message.reply_to_message.text
         combined_input = f"{update.message.text}\n\nالرسالة المردود عليها:\n{target_text}"
@@ -379,15 +272,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "dialect": detected,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
-
-# دالة لتحديد نوع القروب (أبسط مثال)
-def get_group_type(group_id):
-    group_types = {
-        -1001234567890: "funny",
-        -1009876543210: "educational"
-    }
-    return group_types.get(group_id, "general")  # افتراضي عام
-
 
     # ======= لو في كلمات طبية، يتم البحث أولاً =======
     if any(x in combined_input for x in ["علاج", "تشخيص", "أعراض", "مرض", "دواء"]):
