@@ -1,5 +1,11 @@
+import json
 import random
 
+# تحميل قائمة الترندات الذكية من ملف JSON
+with open("trends_trigger.json", "r", encoding="utf-8") as file:
+    trends_data = json.load(file)
+
+# ترندات مبنية على كلمات مفتاحية داخل الكود
 TREND_KEYWORDS = {
     "شنو الترند": [
         "الترند اللي شغال هسه: البنات بقولو 'كول قلبي' بدل 'كسر قلبي' 😂💔 جربوها!",
@@ -48,8 +54,20 @@ TREND_KEYWORDS = {
     ]
 }
 
-def check_trend_trigger(message_text: str) -> str | None:
-    for keyword, responses in TREND_KEYWORDS.items():
+# دالة التحقق من الترند الذكي من ملف JSON
+def check_trend_trigger(message_text):
+    message_text = message_text.lower()
+    for trend in trends_data:
+        keywords = trend.get("keywords", [])
+        for keyword in keywords:
+            if keyword.lower() in message_text:
+                return trend.get("response")
+    return None
+
+# دالة التحقق من الترندات داخل TREND_KEYWORDS
+def check_keyword_trend(message_text):
+    message_text = message_text.lower()
+    for keyword in TREND_KEYWORDS:
         if keyword in message_text:
-            return random.choice(responses)
+            return random.choice(TREND_KEYWORDS[keyword])
     return None
