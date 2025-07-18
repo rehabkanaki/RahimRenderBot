@@ -217,7 +217,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_id = update.message.chat.id
     dialect = "العربية الفصحى"
     group_dialects[group_id] = dialect
-    group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
+    combined_prompt = RAHIM_MAIN_PROMPT + "\n\n" + PROMPTS_LIBRARY
+    group_sessions[group_id] = [{"role": "system", "content": combined_prompt}]
     await update.message.reply_text("البوت شغال ✅")
 
 from trends_manager import get_next_trend_lifo  # استدعاء دالة الترند الجديدة
@@ -257,7 +258,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if group_id not in group_sessions:
         detected = await detect_language_or_dialect(combined_input)
         group_dialects[group_id] = detected
-        group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
+        combined_prompt = RAHIM_MAIN_PROMPT + "\n\n" + PROMPTS_LIBRARY
+        group_sessions[group_id] = [{"role": "system", "content": combined_prompt}]
+
     else:
         detected = group_dialects.get(group_id, "العربية الفصحى")
 
