@@ -326,6 +326,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_sessions[group_id] = [{"role": "system", "content": RAHIM_MAIN_PROMPT}]
     await update.message.reply_text("البوت شغال ✅")
 
+from trends_manager import get_next_trend_lifo  # استدعاء دالة الترند الجديدة
+
 # ========== رسائل القروب ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username.lower()
@@ -343,15 +345,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_name = update.message.from_user.full_name
 
-    # ✅ التحقق من الكلمات المفتاحية للتريند
-    # داخل دالة handle_message
-response = check_trend_trigger(user_message)  # يفحص من trends.json
-if not response:
-    response = check_keyword_trend(user_message)  # يفحص من trend_keywords.py
+    # لو المستخدم طلب ترند صريح
+    if user_message in ["/trend", "ادينا ترند"]:
+        group_type = get_group_type(group_id)  # لازم تعملي الدالة دي حسب القروب
+        trend = get_next_trend_lifo(group_type)
+        if trend:
+            await context.bot.send_message(chat_id=group_id, text=trend)
+        return  # بعد ما أرسل الترند نوقف
 
-if response:
-    await context.bot.send_message(chat_id=group_id, text=response)
-    return # نوقف هنا لو حصل تطابق مع تريند
+    # استكمال باقي الكود العادي
 
     if update.message.reply_to_message and update.message.reply_to_message.text:
         target_text = update.message.reply_to_message.text
@@ -377,6 +379,15 @@ if response:
         "dialect": detected,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
+
+# دالة لتحديد نوع القروب (أبسط مثال)
+def get_group_type(group_id):
+    group_types = {
+        -1001234567890: "funny",
+        -1009876543210: "educational"
+    }
+    return group_types.get(group_id, "general")  # افتراضي عام
+
 
     # ======= لو في كلمات طبية، يتم البحث أولاً =======
     if any(x in combined_input for x in ["علاج", "تشخيص", "أعراض", "مرض", "دواء"]):
