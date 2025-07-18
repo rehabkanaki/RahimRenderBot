@@ -127,11 +127,16 @@ async def perform_web_search(query: str) -> str:
         return f"📛 حصل خطأ أثناء البحث: {str(e)}"
 
 # ========== دوال ترفيه ومحادثة عامة ==========
-async def call_openai_chat(prompt: str, max_tokens=500, temperature=0.7) -> str:
+async def call_openai_chat(prompt: str, max_tokens=700, temperature=0.7) -> str:
     try:
+        combined_prompt = RAHIM_MAIN_PROMPT + "\n\n" + PROMPTS_LIBRARY
+        messages = [
+            {"role": "system", "content": combined_prompt},
+            {"role": "user", "content": prompt},
+        ]
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
         )
