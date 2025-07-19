@@ -228,6 +228,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 from trends_manager import get_next_trend_lifo  # استدعاء دالة الترند الجديدة
 
+# ========== تخزين أسماء الأعضاء ==========
+MEMBERS_FILE = "members.json"
+
+def load_members():
+    if os.path.exists(MEMBERS_FILE):
+        with open(MEMBERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_members(members):
+    with open(MEMBERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(members, f, ensure_ascii=False, indent=2)
+
+def update_member_name(user):
+    members = load_members()
+    user_id = str(user.id)
+    name = user.full_name or user.username or f"مستخدم_{user.id}"
+
+    if user_id not in members or members[user_id] != name:
+        members[user_id] = name
+        save_members(members)
+
+def get_member_name(user_id):
+    members = load_members()
+    return members.get(str(user_id), f"مستخدم_{user_id}")
+
 # ========== رسائل القروب ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username.lower()
@@ -243,7 +269,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     group_id = update.message.chat.id
     user_id = update.message.from_user.id
-    user_name = update.message.from_user.full_name
+    user = update.message.from_user
+    update_member_name(user)
+    user_name = get_member_name(user.id)
 
     # لو المستخدم طلب ترند صريح
     if user_message in ["/trend", "ادينا ترند"]:
