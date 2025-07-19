@@ -23,27 +23,30 @@ def save_indexes(indexes):
     with open(INDEXES_FILE, "w", encoding="utf-8") as f:
         json.dump(indexes, f, ensure_ascii=False, indent=2)
 
-# متغيرات عالمية تحمل بيانات الترندات والمؤشرات
+# متغيرات عالمية
 trends_data = load_trends()
 trend_indexes = load_indexes()
 
-# دالة اختيار الترند حسب LIFO (آخر ترند مُضاف أولاً)
-def get_next_trend_lifo(group_type):
-    trends = trends_data.get(group_type, [])
+# دالة اختيار الترند حسب LIFO
+def get_next_trend_lifo(category):
+    trends = trends_data.get(category, [])
     if not trends:
         return None
 
-    index = trend_indexes.get(group_type, len(trends) - 1)
+    index = trend_indexes.get(category, len(trends) - 1)
     trend = trends[index]
 
     next_index = index - 1 if index > 0 else len(trends) - 1
-    trend_indexes[group_type] = next_index
+    trend_indexes[category] = next_index
 
     save_indexes(trend_indexes)
-
     return trend
 
-# دالة إعادة تعيين المؤشرات (reset)
+# دالة عامة تستخدم النوع "general" فقط
+def get_general_trend():
+    return get_next_trend_lifo("general")
+
+# إعادة تعيين كل المؤشرات
 def reset_trend_indexes():
     global trend_indexes
     trend_indexes = {}
